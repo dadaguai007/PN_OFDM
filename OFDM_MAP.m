@@ -8,13 +8,15 @@ addpath('D:\PhD\Codebase\')
 % 相位估计迭代
 % 接收信号进行估计迭代
 
-R; % 接收信号
+% 假设接收矩阵为N*N
+% ICI 收到2M+1 载波影响
+R; % 接收信号 可以看成是一个矩阵
 
 prior_mu; %相位噪声先验均值(向量)
 prior_Sigma;%相位噪声先验协方差矩阵
 sigma_sq; % 噪声方差
 
-% % 相位噪声先验参数（假设零均值、单位协方差）
+% % 相位噪声先验参数 大小设置完成
 % prior_mu = zeros(4*M+2, 1);
 % prior_Sigma = eye(4*M+2);
 
@@ -27,11 +29,11 @@ sigma_sq; % 噪声方差
 % 构造矩阵B (频域循环卷积的子矩阵)
 B = construct_B(H, X_prev, Omega, N);
 
-% 构造实虚合并矩阵T = [real(B); imag(B)]
-T = [real(B); imag(B)];
+% 构造实虚合并矩阵 N*（4M+2）
+T = [B; 1j*B];
 
-% 转换为实值问题，接收信号分解为实部和虚部
-R_real = [real(R); imag(R)];
+% beta 应为 4M+2的长度
+
 % 计算相位噪声估计beta_hat（公式21） T'确实是共轭
 term1 = real(T' * T) + (sigma_sq/2) * inv(prior_Sigma);
 term2 = real(T' * R) + (sigma_sq/2) * inv(prior_Sigma) * prior_mu;
@@ -62,7 +64,10 @@ refTrainSymbol = qam_signal_mat(:,1:nTrainSym);
 Hf = mean(rxTrainSymbol./refTrainSymbol,2);
 % channel equalization(LS均衡)
 data_kk = data_kk_ofdm.*repmat(1./Hf,1,nn.nPkts*HK);
-% 信道响应矩阵：
+
+% 此时的data_kk 是一个N*N的矩阵
+
+% 信道响应矩阵： N* 1 的矩阵（按照符号长度定义）
 H=repmat(Hf,1,nn.nPkts*HK);
 % 硬判决
 X_init=hard_decision(data_kk);
@@ -114,7 +119,7 @@ function X_LS = compensate_phase_noise(R, H, alpha_Omega, Omega, N)
 % N: 子载波数
 
 % 确认输出信号大小！！！
-
+% 输出
 X_LS = zeros(N, 1);
 %     M = (length(Omega) - 1)/2;
 
@@ -125,7 +130,7 @@ for k = 0:N-1
         l = Omega(l_idx);
         % 计算 (k-l) mod N
         idx = mod(k-l, N);
-        % 取alpha的共轭---对应公式27中的alpha^*[(-l)]
+        % 取alpha的共轭---对应公式27中的alpha^*[(-l)]，循环矩阵的缘故
         alpha_conj = conj(alpha_Omega(l_idx));
         sum_term = sum_term + alpha_conj * R(idx + 1);  % MATLAB索引从1开始
     end

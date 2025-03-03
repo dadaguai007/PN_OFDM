@@ -23,23 +23,29 @@ end
 R=data_kk;
 % 硬判决
 % 提取每个载波的所有符号,进行硬判决
-
 for index=1:size(R,1)
-
     R_hat(index,:)=hard_decision(M,R(index,:));
+end
+
+% 分组
+Group_Num = 30;
+
+for m=1:Num_Carrier/Group_Num
+    % 每组数据的索引
+    Num=(m-1)*Group_Num+1:1:m*Group_Num;
+    % 每组的H矩阵
+    H(m,:)=sum( R(Num,:).* conj(R_hat(Num,:)));
+    % second stage phase estimation
+    phi(m,:)= atan(imag(H)./real(H));
 
 end
 
-% 共轭  conj(R_hat)
-
-H=sum( R.* conj(R_hat));
-
-% second stage phase estimation
-phi= atan(imag(H)./real(H));
 
 % 补偿
-X=R.*...
-    repmat(exp(-1j.*phi),size(R,1),1);
-
-
-
+for m=1:Num_Carrier/Group_Num
+    % 每组数据的索引
+    Num=(m-1)*Group_Num+1:1:m*Group_Num;
+    % 每组之间进行补偿
+    X(Num,:)=R(Num,:).*...
+             repmat(exp(-1j.*phi(m,:)),Group_Num,1);
+end

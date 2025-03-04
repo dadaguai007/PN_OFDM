@@ -1,7 +1,7 @@
 clear;close all;clc;
 addpath('Fncs\')
-% addpath('D:\PhD\Codebase\')
-addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+addpath('D:\PhD\Codebase\')
+% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 OFDM_TX;
 % 生成信号
 [y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();

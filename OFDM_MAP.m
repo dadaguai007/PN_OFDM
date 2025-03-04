@@ -8,25 +8,50 @@ addpath('D:\PhD\Codebase\')
 % 相位估计迭代
 % 接收信号进行估计迭代
 
+% 接收的信号R 矩阵形状为 载波*符号
+
+% 接下来的矩阵操作都是 符号* 载波
+
+M=16;
 % 假设接收矩阵为N*N
 % ICI 收到2M+1 载波影响
-R; % 接收信号 可以看成是一个矩阵
-
-prior_mu; %相位噪声先验均值(向量)
-prior_Sigma;%相位噪声先验协方差矩阵
-sigma_sq; % 噪声方差
-
-% % 相位噪声先验参数 大小设置完成
-% prior_mu = zeros(4*M+2, 1);
-% prior_Sigma = eye(4*M+2);
+R; 
 
 
+% sigma_sq; % 噪声方差
+
+% % % 相位噪声先验参数 大小设置完成
+% prior_mu = zeros(4*M+2, 1); % 假设零均值 ， 
+% % prior_Sigma = eye(4*M+2);
+
+
+% 问题: 先验参数的估计：
+% 参数设定
+m = 1;                      % 相位噪声低频分量数
+num_terms = 2*m + 1;        % Omega中的分量数
+sigma_l = [0.1, 0.2, 0.05]; % 各频谱分量的标准差（示例）
+
+% 先验均值（假设为零均值）%相位噪声先验均值(向量)
+prior_mu = zeros(2*num_terms, 1);
+
+% 协方差矩阵（假设频谱分量独立且Γ=0）
+Sigma_alpha = diag(sigma_l.^2);      % α_Ω的协方差矩阵
+Sigma_R = real(Sigma_alpha) / 2;     % 实部协方差
+Sigma_I = real(Sigma_alpha) / 2;     % 虚部协方差
+Sigma_RI = -imag(Sigma_alpha) / 2;   % 实虚交叉协方差
+Sigma_IR = imag(Sigma_alpha) / 2;    % 虚实交叉协方差
+
+% 构造Σβ %相位噪声先验协方差矩阵
+prior_Sigma = [Sigma_R, Sigma_RI; 
+              Sigma_IR, Sigma_I];
 
 [X_prev,H] = initial_data_estimation(H, R) ;
 
-
+for iter = 1:I_max
 % 构造T矩阵，由B矩阵为基本元素！！！
 % 构造矩阵B (频域循环卷积的子矩阵)
+% B矩阵有两种方式： 全矩阵，以及2M+1载波的矩阵
+
 B = construct_B(H, X_prev, Omega, N);
 
 % 构造实虚合并矩阵 N*（4M+2）
@@ -39,7 +64,7 @@ term1 = real(T' * T) + (sigma_sq/2) * inv(prior_Sigma);
 term2 = real(T' * R) + (sigma_sq/2) * inv(prior_Sigma) * prior_mu;
 
 % 求向量bete_hat(估计得到)
-beta_hat = term1 \ term2;
+beta_hat = term1 \ term2;  % 等价于 inv(term1) * term2
 
 % 提取复数形式的相位噪声估计alpha_Omega（公式22）
 alpha_Omega = beta_hat(1:2*M+1) + 1j * beta_hat(2*M+2:end);
@@ -51,9 +76,13 @@ X_LS = compensate_phase_noise(R, H, alpha_Omega, Omega, N);
 % 硬判决（公式28）
 X_current = hard_decision(X_LS);
 
-
-
-
+% 检查终止条件：数据符号变化小于阈值（使用范数进行判断）
+if norm(X_current - X_prev) < epsilon
+    break;
+end
+X_prev = X_current;
+end
+X_hat = X_current;
 %% 子函数1: 初始数据估计（忽略相位噪声）
 function [X_init,H] = initial_data_estimation(data_kk_ofdm,qam_signal,HK)
 % 简化的LS均衡 + 硬判决
@@ -74,33 +103,30 @@ X_init=hard_decision(data_kk);
 end
 
 
-function rxSignal=hard_decision(M,R)
-% 硬判决
-const = qammod([0:M-1],M);
-% 归一化
-const=pnorm(const);
-for i = 1:length(R)
-    distances = abs(R(i) - const).^2; % 计算接收信号点到所有星座点的距离
-    [~, index] = min(distances); % 找到距离最近的星座点的索引
-    rxSymbols(i) = index; % 记录判决结果
-end
-% 恢复出的信号
-rxSignal= const(rxSymbols);
-end
+
 %% 子函数2: 构造矩阵B（频域循环卷积子矩阵）
-function B = construct_B(R, Omega, N)
+% B矩阵应为N*2M+1
+
+% 如何处理循环卷积矩阵
+function B = construct_B(H,X, Omega, N,k)
 % 输入:
 % H: 信道频域响应 (N x 1)
 % X: 当前数据符号估计 (N x 1)
 % Omega: 相位噪声频谱分量索引 (例如[N-1, 0, 1]对应循环索引)
 % N: 子载波数
+% k是载波索引
 
 
-% 直接用接收的信号进行代替？
-HX=R;
-%     HX = H .* X;  % 逐元素相乘
 num_terms = length(Omega);
 B = zeros(N, num_terms);
+% ICI影响区间
+M=(num_terms-1)/2;
+%  影响的载波索引
+Carrier_index=k-M:1:k+M;
+% 只取2M+1的载波
+% HX=R(:,Carrier_index);
+
+HX = H(:,Carrier_index) .* X(:,Carrier_index);  % 逐元素相乘（刚估计出的X*信道矩阵）
 
 for idx = 1:num_terms
     shift = Omega(idx);
@@ -118,23 +144,24 @@ function X_LS = compensate_phase_noise(R, H, alpha_Omega, Omega, N)
 % Omega: 相位噪声索引集合
 % N: 子载波数
 
-% 确认输出信号大小！！！
-% 输出
-X_LS = zeros(N, 1);
-%     M = (length(Omega) - 1)/2;
 
 for k = 0:N-1
     sum_term = 0;
 
     for l_idx = 1:length(Omega)
+
         l = Omega(l_idx);
-        % 计算 (k-l) mod N
-        idx = mod(k-l, N);
+
+        % ICI影响区间
+        M=(l-1)/2;
+        %  影响的载波索引
+        Carrier_index=k-M:1:k+M;
+
         % 取alpha的共轭---对应公式27中的alpha^*[(-l)]，循环矩阵的缘故
-        alpha_conj = conj(alpha_Omega(l_idx));
-        sum_term = sum_term + alpha_conj * R(idx + 1);  % MATLAB索引从1开始
+        alpha_conj = conj(alpha_Omega(:,l_idx));
+        sum_term = sum_term + alpha_conj * R(:,Carrier_index(l_idex));  % 受到影响的载波索引
     end
-    % 从接收的信号中去除相噪
-    X_LS(k + 1) = sum_term / H(k+1);
+    % 从接收的信号中去除相噪(对每一个载波单独计算)
+    X_LS(:,k + 1) = sum_term ./ H(:,k+1);
 end
 end

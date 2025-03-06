@@ -1,5 +1,7 @@
 clc;clear;close all;
 % 复现：Analytical study of optical SSB-DMT with IMDD
+% 复现：A closed-form expression for direct detection transmission systems with kramers-kronig receiver
+
 addpath('Fncs\')
 addpath('D:\PhD\Codebase\')
 
@@ -13,7 +15,7 @@ f_deta=fs/(nn.fft_size-1);
 
 % fiber param
 param=struct();
-param.Ltotal = 300; %km
+param.Ltotal = 4800; %km
 param.Lspan =10;
 param.hz= 10;
 param.alpha=0.2;

@@ -136,6 +136,8 @@ ylabel('phas fluctuation/rad')
 % 星座图
 scatterplot(signal_scatter);
 
+save('OFDM_4800km.mat',data_kk_mat,ref_seq)
+
 
 if 0
     % EVM of symbol

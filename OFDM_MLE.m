@@ -25,6 +25,7 @@ R=data_kk;
 % 提取每个载波的所有符号,进行硬判决
 
 for index=1:size(R,1)
+% 此数进行Weight_Decsion替换
 
     R_hat(index,:)=hard_decision(M,R(index,:));
 

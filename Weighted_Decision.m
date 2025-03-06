@@ -21,9 +21,9 @@ f_q=reliability_nonlinear(gamma_q,a,b);
 
 
 %WD
-s_i_wd=s_i+f_i.*E_i;
+s_i_wd=s_i+(f_i.').*(E_i);
 
-s_q_wd=s_q+f_q.*E_q;
+s_q_wd=s_q+(f_q.').*(E_q);
 
 
 S_wd=s_i_wd+1j*s_q_wd;

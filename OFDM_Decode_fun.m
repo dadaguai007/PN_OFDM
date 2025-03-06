@@ -14,10 +14,10 @@ yyy = data_kk;
 yyy_1 = qamdemod(yyy,M,'OutputType','bit','UnitAveragePower',1);
 yyy_1=yyy_1(:);
 % 全部的序列进行解码
-[ber1(squ_num),num1(squ_num),error_location] = CalcBER(yyy_1,ref_seq_1); %计算误码率
-fprintf('Num of Errors = %d, BER = %1.7f\n',num1(squ_num),ber1(squ_num));
+[ber1,num1,error_location] = CalcBER(yyy_1,ref_seq_1); %计算误码率
+fprintf('Num of Errors = %d, BER = %1.7f\n',num1,ber1);
 % 按符号解码，每个符号上的错码数
-Calc_BER_mat;
+% Calc_BER_mat;
 
 
 end

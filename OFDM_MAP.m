@@ -83,6 +83,11 @@ end
 X_prev = X_current;
 end
 X_hat = X_current;
+
+
+
+
+
 %% 子函数1: 初始数据估计（忽略相位噪声）
 function [X_init,H] = initial_data_estimation(data_kk_ofdm,qam_signal,HK)
 % 简化的LS均衡 + 硬判决
@@ -108,7 +113,7 @@ end
 % B矩阵应为N*2M+1
 
 % 如何处理循环卷积矩阵
-function B = construct_B(H,X, Omega, N,k)
+function B_index = construct_B(H,X, Omega, N,k)
 % 输入:
 % H: 信道频域响应 (N x 1)
 % X: 当前数据符号估计 (N x 1)
@@ -116,7 +121,9 @@ function B = construct_B(H,X, Omega, N,k)
 % N: 子载波数
 % k是载波索引
 
-
+% 取所有载波的第一个符号  →→→  后续可扩展为所有载波的单独一个符号
+H=H(1,:);
+X=X(1,:);
 num_terms = length(Omega);
 B = zeros(N, num_terms);
 % ICI影响区间
@@ -126,13 +133,18 @@ Carrier_index=k-M:1:k+M;
 % 只取2M+1的载波
 % HX=R(:,Carrier_index);
 
-HX = H(:,Carrier_index) .* X(:,Carrier_index);  % 逐元素相乘（刚估计出的X*信道矩阵）
+% Hx为向量形式(应先形成矩阵，再从输出向量B中进行取值)
+% HX = H(:,Carrier_index) .* X(:,Carrier_index);  % 逐元素相乘（刚估计出的X*信道矩阵）
+% 生成信道的对角矩阵 以及接收信号的列向量 进行相乘，得到接收信号状态
+HX=diag(H)*X.';
 
 for idx = 1:num_terms
-    shift = Omega(idx);
+%     shift = Omega(idx);
     % 循环移位HX，对应频域循环卷积
-    B(:, idx) = circshift(HX, shift);
+    B(:, idx) = circshift(HX, idx-1);
 end
+% 取收到影响载波对应的B矩阵
+B_index=B(:,Carrier_index);
 end
 
 %% 子函数3: 相位噪声补偿（频域操作）

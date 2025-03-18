@@ -1,6 +1,6 @@
 addpath(genpath('Fcns'));
-
-nn=OFDMQAMN();
+% 带有相位共轭项的OFDM信号
+nn=OFDMQAMN_phase_conjugated();
 nn.DataType='rand';%两个选项：prbs，rand
 nn.fft_size = 1024;
 nn.nPkts = 1000;
@@ -21,5 +21,6 @@ nn.psfShape='sqrt';
 nn.psfshape='Raised Cosine';
  
 f_idex=((nn.nModCarriers+nn.nOffsetSub)/nn.fft_size)*nn.Fs; 
-
+% 载波位置
+postiveCarrierIndex=nn.nOffsetSub+1:1:nn.nModCarriers+nn.nOffsetSub;
 % OFDM：1024*nPkts+32*nPkts

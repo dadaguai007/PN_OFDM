@@ -77,8 +77,8 @@ classdef OFDMQAMN_phase_conjugated < handle
             disp(summaryTable);
         end
 
-
-        function [y1,y2,signal,qam_signal,index_data,index_pcp]=Output(obj)
+        % 生成 索引  与 qam组合矩阵
+        function [y1,y2,signal,qam_signal,index_data,index_pcp,qam_mat_phase]=Output(obj)
             %生成bit数，进行pammod的调制,脉冲成型，希尔伯特变换，取实部和虚部一起输出
             switch lower(obj.DataType)
                 case 'prbs'
@@ -90,13 +90,9 @@ classdef OFDMQAMN_phase_conjugated < handle
             qam_signal=obj.qam(symbols);
             %归一化
             %qam_signal = qam_signal./sqrt(mean(qam_signal.^2));
-            %ofdm生成波形
-%             [ofdm_signal,postiveCarrierIndex] = obj.ofdm(qam_signal);
-            % 脉冲成型
-            %             signal=obj.MakeFilter(ofdm_signal,obj.hsqrt);
-            %             signal = resample(signal,obj.Fs,obj.Nsam*obj.Rs);
+
             % 50%PCP
-            [ofdm_signal_pcp,index_data,index_pcp] = obj.ofdm_pcp_50(qam_signal);
+            [ofdm_signal_pcp,index_data,index_pcp,qam_mat_phase] = obj.ofdm_pcp_50(qam_signal);
 
             %                [ofdm_signal_pcp,index_data,index_pcp] = obj.ofdm_pcp_33(qam_signal);
             %重采样
@@ -138,22 +134,18 @@ classdef OFDMQAMN_phase_conjugated < handle
 
 
         function qam_signal=qam(obj,symbols)
-
-            %             qam_signal = qammod(symbols,obj.M);% 使用MATLAB自带的qammod函数进行qam调制
-            %             qam_signal=qammod(symbols,obj.M,'InputType','bit') ;
-            qam_signal=qammod(symbols,obj.M,'InputType','bit','UnitAveragePower',1) ;
-            qam_signal = reshape(qam_signal,obj.nModCarriers,[]);
+            % 因为相位共轭关系，所以qam矩阵载波减半
+            L=size(symbols,2)/2;
+            qam_signal=qammod(symbols(:,1:L),obj.M,'InputType','bit','UnitAveragePower',1) ;
+            qam_signal = reshape(qam_signal,obj.nModCarriers/2,[]);
         end
 
-        function pcp_signal=phase_conjugated(qam_signal)
-
-            % qam_signal = qammod(symbols,obj.M);% 使用MATLAB自带的qammod函数进行qam调制
-            % qam_signal=qammod(symbols,obj.M,'InputType','bit') ;
-            % qam_signal=qammod(symbols,obj.M,'InputType','bit','UnitAveragePower',1) ;
-            % qam_signal = reshape(qam_signal,obj.nModCarriers,[]);
-            % 所有信号的共轭
-            pcp_signal=conj(qam_signal);
-        end
+        %         function pcp_signal=phase_conj(obj,symbols)
+        %             qam_signal=qammod(symbols,obj.M,'InputType','bit','UnitAveragePower',1) ;
+        %             qam_signal = reshape(qam_signal,obj.nModCarriers,[]);
+        %             % 所有信号的共轭
+        %             pcp_signal=conj(qam_signal);
+        %         end
 
 
 
@@ -177,19 +169,26 @@ classdef OFDMQAMN_phase_conjugated < handle
         end
 
 
-        function     [ofdm_signal,postive_odd_index,postive_even_index]=ofdm_pcp_50(obj,qam_signal)
-                
-%             postiveCarrierIndex = obj.nOffsetSub + (1:obj.nModCarriers);
+        function     [ofdm_signal,postive_odd_index,postive_even_index,qam_mat]=ofdm_pcp_50(obj,qam_signal)
+
             % PC_pilot
-            pcp_signal=phase_conjugated(qam_signal);
+            pcp_signal=conj(qam_signal);
+
+
             % 设置索引
-            n=1:2*obj.nModCarriers;
-            postive_odd_index=obj.nOffsetSub+2*(n-1);% 奇数放置Data
-            postive_even_index=obj.nOffsetSub+2*n;%偶数放置phase data
+            n_odd=1:2:obj.nModCarriers;
+            n_even=2:2:obj.nModCarriers;
+            % 得到新的QAM矩阵
+            qam_mat=zeros(obj.nModCarriers,obj.nPkts);
+            qam_mat(n_odd,:)=qam_signal;
+            qam_mat(n_even,:)=pcp_signal;
+
+            postive_odd_index=obj.nOffsetSub+n_odd;% 奇数放置Data
+            postive_even_index=obj.nOffsetSub+n_even;%偶数放置phase data
             % nOffsetSub 行置零 ,OFDM_PCP信号
             X=zeros(obj.fft_size,obj.nPkts);
-            X(postive_odd_index)=qam_signal;
-            X(postive_even_index)=pcp_signal;
+            X(postive_odd_index,:)=qam_signal;
+            X(postive_even_index,:)=pcp_signal;
             % 转换为时域
             ofdmSig=ifft(X);
             ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
@@ -199,13 +198,13 @@ classdef OFDMQAMN_phase_conjugated < handle
         end
 
         function     [ofdm_signal,index_data,index_pcp]=ofdm_pcp_percentage_33(obj,qam_signal)
-           % 需要插入PCP的数量
-           N=obj.nModCarriers*obj.percentage;
-           % 只代表33% 的PCP 
-           n=2:1:N;
-           index_pcp=obj.nOffsetSub+[2,3*n-1];
-           % 找到需要进行conj的data
-           index_data=index_pcp-1;
+            % 需要插入PCP的数量
+            N=obj.nModCarriers*obj.percentage;
+            % 只代表33% 的PCP
+            n=2:1:N;
+            index_pcp=obj.nOffsetSub+[2,3*n-1];
+            % 找到需要进行conj的data
+            index_data=index_pcp-1;
 
 
             % 初始信号

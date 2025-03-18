@@ -2,9 +2,9 @@ clear;close all;clc;
 addpath('Fncs\')
 % addpath('D:\PhD\Codebase\')
 addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
-OFDM_TX;
+OFDM_TX_phase_conjugated;
 % 生成信号
-[y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();
+[y1,y2,signal,qam_signal,index_data,index_pcp,qam_mat_phase]=nn.Output();
 label = nn.ofdm(qam_signal);
 
 % System Parameters
@@ -110,7 +110,7 @@ if strcmp(CPE_Status,'on')
 end
 
 % 按顺序解码
-OFDM_Decode_squence;
+OFDM_Decode_squence_pcp;
 
 
 
@@ -134,29 +134,8 @@ ylabel('phas fluctuation/rad')
 
 
 % 星座图
-scatterplot(signal_scatter);
-
-% save('OFDM_4800km.mat',data_kk_mat,ref_seq)
+scatterplot(data_rec);
 
 
-if 0
-    % EVM of symbol
-    figure;
-    plot(symbol_EVM(:,1))
-    title('EVM of symbol');
-
-    % EVM of subcarrier
-    figure;
-    plot(subcarrier_EVM(:,1))
-    title('EVM of subcarrier');
-
-    % EVM of one subcarrier of Index symbol
-    figure;
-    plot(subcarrier_index_symbol_EVM)
 
 
-    % RX_OFDM
-    figure;
-    plot(real(signal_squ_ofdm(1:1e4)))
-    title('Rx_{OFDM}')
-end

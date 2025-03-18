@@ -5,7 +5,7 @@ addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 
  
 % % System Parameters
-fs=40e9;
+fs=60e9;
 Ta=1/fs;
 
 
@@ -17,7 +17,7 @@ data_num=1e6;
 Pi_dBm = 10;
 Pi = 10^(Pi_dBm/10)*1e-3; %W
 Ai= sqrt(Pi);
-lw      = 2e6;    % laser linewidth
+lw      = 1e3;    % laser linewidth
 phi_pn_lo = phaseNoise(lw, data_num, Ta);
 sigLO = exp(1j * phi_pn_lo);
 Pin=Ai*sigLO;
@@ -25,7 +25,7 @@ Pin=Ai*sigLO;
 
 % fiber param
 param=struct();
-param.Ltotal = 80; %km
+param.Ltotal = 1000; %km
 param.Lspan =10;
 param.hz= 0.5;
 param.alpha=0.2;

@@ -37,13 +37,13 @@ N_index=length(signal_TX);
 ref_seq=reshape(qam_signal,1,[]);
 ref_seq = repmat(ref_seq,1,100);
 
-% Laser
+%%---------------------------------------          Laser           ----------------------------%%
 % Generate LO field with phase noise
 % 输入光功率
 Pi_dBm = 10;
 Pi = 10^(Pi_dBm/10)*1e-3; %W
 Ai= sqrt(Pi);
-lw      = 2e6;    % laser linewidth
+lw      = 1e3;    % laser linewidth
 phi_pn_lo = phaseNoise(lw, length(signal_TX), Ta);
 sigLO = exp(1j * phi_pn_lo);
 Pin=Ai*sigLO;
@@ -109,7 +109,7 @@ if strcmp(CPE_Status,'on')
     pilotIndex=1:2:W;
 end
 
-% 按顺序解码
+%%---------------------------------------        解码       ---------------------------%%
 OFDM_Decode_squence;
 
 
@@ -136,7 +136,7 @@ ylabel('phas fluctuation/rad')
 % 星座图
 scatterplot(signal_scatter);
 
-% save('OFDM_4800km.mat',data_kk_mat,ref_seq)
+% save('OFDM_700km.mat','data_kk_mat','ref_seq','qam_signal')
 
 
 if 0

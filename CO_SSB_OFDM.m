@@ -1,6 +1,7 @@
 clear;close all;clc;
 addpath('Fncs\')
-addpath('D:\PhD\Codebase\')
+% addpath('D:\PhD\Codebase\')
+addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 OFDM_TX;
 % 生成信号
 [y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();
@@ -53,9 +54,9 @@ signal_TXO=signal_TX;
 
 % fiber param
 param=struct();
-param.Ltotal = 1000; %km
+param.Ltotal = 700; %km
 param.Lspan =10;
-param.hz= 10;
+param.hz= 1;
 param.alpha=0.2;
 param.D = 16;
 param.gamma = 0;

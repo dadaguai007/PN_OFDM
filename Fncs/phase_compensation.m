@@ -3,7 +3,7 @@
 % W=400;
 % pilotIndex=1:1:W;
 phi_mean=angle(mean(data_kk(pilotIndex,:)./...
-    qam_signal_mat(pilotIndex,:)));
+    qam_signal_mat(pilotIndex,:),1));
 
 
 data_kk=data_kk.*...

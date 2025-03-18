@@ -4,8 +4,8 @@ addpath('Fncs\')
 % addpath('D:\PhD\Codebase\')
 addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % load data_kk_mat 加载接收矩阵（进行信道估计后）
-load OFDM_4800km.mat
-load OFDM_4800km_label.mat
+load OFDM_700km.mat
+
 % H向量大小为   符号数*1；
 
 % 原始信号
@@ -24,20 +24,23 @@ pilotIndex= 1:2:Num_Carrier;
 data_kk=data_kk_mat;
 % 进行相位估计，并进行补偿
 
-phase_compensation;
+% phase_compensation;
 
+% 归一化
+data_rec=data_kk(:);
+data_rec = data_rec./sqrt(mean(abs(data_rec(:)).^2));
 
 % 第一阶段后的接收信号
-R=data_kk;
+R=reshape(data_rec,size(data_kk,1),[]);
 % 硬判决
 % 提取每个载波的所有符号,进行硬判决
 
 for index=1:size(R,1)
 
     % 硬判决
-%     R_hat(index,:)=hard_decision_qam(M,R(index,:));
+    R_hat(index,:)=hard_decision_qam(M,R(index,:));
     % Weight_Decision
-    R_hat(index,:)=Weighted_Decision(R(index,:));
+%     R_hat(index,:)=Weighted_Decision(R(index,:));
 end
 
 % 共轭  conj(R_hat)

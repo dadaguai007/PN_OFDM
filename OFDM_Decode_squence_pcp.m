@@ -52,9 +52,10 @@ for squ_num=1:k
     % 找到索引
     data_index=index_data-nn.nOffsetSub;
     pcp_index=index_pcp-nn.nOffsetSub;
-
+    % 选取共轭数据
     data_kk_data=data_kk(data_index,:);
     data_kk_pcp=data_kk(pcp_index,:);
+
 
     %   共轭消除
 

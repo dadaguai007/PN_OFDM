@@ -118,7 +118,7 @@ OFDM_Decode_squence_pcp;
 % Rx_16QAM
 data_kk_mat;
 % scatterplot(data_kk_mat(1,:));
-% 第i个载波上的相噪分布
+% 第i个载波上的相噪分布(相位共轭后的相噪分布)
 jj=1;
 phase_jj=angle(data_kk_mat(jj,:)./qam_signal_mat(jj,:));
 % PRT方差
@@ -136,6 +136,15 @@ ylabel('phas fluctuation/rad')
 % 星座图
 scatterplot(data_rec);
 
+% 第一个载波的相位估计量
+index=1;
+P_index=data_kk_data(index,:).*data_kk_pcp(index,:);
+P_index_amp=abs(data_kk_data(1,:)).^2;
+% 相位
+Pn_p=angle(P_index./P_index_amp)/2;
 
 
-
+figure;
+plot(Pn_p)
+xlabel('symbol')
+ylabel('P subcarrier phas fluctuation/rad')

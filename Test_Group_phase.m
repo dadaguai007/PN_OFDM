@@ -1,9 +1,9 @@
 % 复现:Dispersion-enhanced phase noise effects on reduced-guard-interval CO-OFDM transmission
 clear;close all;clc;
 addpath('Fncs\')
-% addpath('D:\PhD\Codebase\')
+addpath('D:\PhD\Codebase\')
 
-addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % load data_kk_mat 加载接收矩阵（进行信道估计后）
 load OFDM_700km.mat
 % H向量大小为   符号数*1；
@@ -43,7 +43,7 @@ R=reshape(data_rec,size(data_kk,1),[]);
 % end
 
 %%----------------------------------------- 分组  ------------------------------------------------------------%%
-Group_Num = 2;
+Group_Num = 4;
 
 for m=1:Num_Carrier/Group_Num
     % 每组数据的索引

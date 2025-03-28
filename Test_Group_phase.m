@@ -2,10 +2,9 @@
 clear;close all;clc;
 addpath('Fncs\')
 % addpath('D:\PhD\Codebase\')
-
 addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % load data_kk_mat 加载接收矩阵（进行信道估计后）
-load OFDM_700km.mat
+load OFDM_700km_fs32.mat
 % H向量大小为   符号数*1；
 
 % 原始信号
@@ -19,7 +18,7 @@ M=16;
 % 载波数
 Num_Carrier=size(data_kk_mat,1);
 % 选取合适导频进行phase 估计
-pilotIndex= 1:1:Num_Carrier;
+pilotIndex= 1:10:Num_Carrier;
 
 % 数据采集
 data_kk=data_kk_mat;
@@ -43,7 +42,7 @@ R=reshape(data_rec,size(data_kk,1),[]);
 % end
 
 %%----------------------------------------- 分组  ------------------------------------------------------------%%
-Group_Num = 2;
+Group_Num = 10;
 
 for m=1:Num_Carrier/Group_Num
     % 每组数据的索引

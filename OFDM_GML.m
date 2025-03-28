@@ -5,7 +5,7 @@ addpath('Fncs\')
 
 addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % load data_kk_mat 加载接收矩阵（进行信道估计后）
-load OFDM_700km.mat
+load OFDM_700km_fs32.mat
 % H向量大小为   符号数*1；
 
 % 原始信号
@@ -37,9 +37,9 @@ R=reshape(data_rec,size(data_kk,1),[]);
 % 提取每个载波的所有符号,进行硬判决
 for index=1:size(R,1)
     % 硬判
-    %     R_hat(index,:)=hard_decision_qam(M,R(index,:));
+        R_hat(index,:)=hard_decision_qam(M,R(index,:));
     % Weight_Decision
-    R_hat(index,:)=Weighted_Decision(R(index,:));
+%     R_hat(index,:)=Weighted_Decision(R(index,:));
 end
 
 %%----------------------------------------- 分组  ------------------------------------------------------------%%
@@ -51,8 +51,8 @@ for m=1:Num_Carrier/Group_Num
     % 每组的H矩阵
     H(m,:)=sum( R(Num,:).* conj(R_hat(Num,:)));
     % second stage phase estimation
-    %     phi(m,:)= atan(imag(H(m,:))./real(H(m,:)));
-    phi(m,:)= angle(H(m,:));
+        phi(m,:)= atan(imag(H(m,:))./real(H(m,:)));
+%     phi(m,:)= angle(H(m,:));
 
 end
 

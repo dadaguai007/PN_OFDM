@@ -136,7 +136,7 @@ ylabel('phas fluctuation/rad')
 % 星座图
 scatterplot(signal_scatter);
 
-% save('OFDM_700km.mat','data_kk_mat','ref_seq','qam_signal')
+% save('OFDM_700km_fs32.mat','data_kk_mat','ref_seq','qam_signal')1
 
 
 if 0

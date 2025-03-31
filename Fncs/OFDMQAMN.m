@@ -18,8 +18,6 @@ classdef OFDMQAMN < handle
         psfLength;
 
         ipaddr
-        signalname
-        defaul
 
         fft_size;
         nPkts;
@@ -27,7 +25,12 @@ classdef OFDMQAMN < handle
         nModCarriers;
         nOffsetSub;
 
-        Type
+        Type;
+
+        len;
+        dataCarrierIndex;
+
+        cyclic_pattern;
     end
 
     properties (Dependent = true)
@@ -57,6 +60,7 @@ classdef OFDMQAMN < handle
             obj.nCP = 32;
             obj.nModCarriers = 320;
             obj.Type ='std';
+            obj.cyclic_pattern='none';
         end
 
         %生成表头文件
@@ -86,14 +90,9 @@ classdef OFDMQAMN < handle
             end
             %调制
             qam_signal=obj.qam(symbols);
-            %归一化
-            %qam_signal = qam_signal./sqrt(mean(qam_signal.^2));
+
             %ofdm生成波形
             [ofdm_signal,postiveCarrierIndex] = obj.ofdm(qam_signal);
-            % 脉冲成型
-%             signal=obj.MakeFilter(ofdm_signal,obj.hsqrt);
-%             signal = resample(signal,obj.Fs,obj.Nsam*obj.Rs);
-
             %重采样
             signal =resample(ofdm_signal,obj.Fs,obj.Rs);
             SigI=real(signal);
@@ -102,13 +101,91 @@ classdef OFDMQAMN < handle
             y2=SigQ(:);
         end
 
+
+
+        function [signal,qam_signal,postiveCarrierIndex,Grop_index]=Output_Group(obj,L,L_cp,L_cs)
+            %生成bit数，进行pammod的调制,脉冲成型，希尔伯特变换，取实部和虚部一起输出
+            switch lower(obj.DataType)
+                case 'prbs'
+                    [~,symbols]=obj.prbs_bits();
+                case 'rand'
+                    symbols=obj.rand_bits();
+            end
+            %调制
+            qam_signal=obj.qam(symbols);
+
+            %ofdm生成波形
+            [Grop_index,ofdm_signal,postiveCarrierIndex] = obj.Grop_ofdm(qam_signal,L,L_cp,L_cs);
+            %重采样
+            signal =resample(ofdm_signal,obj.Fs,obj.Rs);
+            SigI=real(signal);
+            SigQ=imag(signal);
+
+        end
+
+
+        % 分组OFDM
+        % 在每组载波组中，加入循环载波，需要注意 信号矩阵 的载波 总数 不高于 设置的 信号频率（即从信号频域，进行数据的倒推）
+        function [Grop_index,ofdmSig,postiveCarrierIndex]=Grop_ofdm(obj,qam_signal,L,L_cp,L_cs)
+            % L组 ， 每组len_carrier个载波
+            len_carrier=obj.nModCarriers/L;
+            % 子载波的顺序索引
+            for i=1:L
+                Grop_index(i,:)=len_carrier*(i-1)+1:len_carrier*i;
+            end
+
+            if strcmp(obj.cyclic_pattern,'CP_CS')
+                % 添加前缀与后缀,并组成新的 信号矩阵
+                for num =1:L
+                    % 每组的载波信号
+                    group = qam_signal(Grop_index(num,:), :);
+                    % 添加循环前缀（复制末尾L_cp个符号）
+                    cp = group(end-L_cp+1:end,:);
+                    % 添加循环后缀（复制开头L_cs个符号）
+                    cs = group(1:L_cs,:);
+
+                    % 求取 加上索引后的新载波数
+                    sum_index=len_carrier+L_cp+L_cs;
+                    % 创建新的载波索引：
+                    data_index=sum_index*(num-1)+1:sum_index*num;
+                    % 放置于载波数组中
+                    extendedSymbols(data_index,:) = [cp; group; cs];
+                end
+                % 数据载波位置
+                postiveCarrierIndex=obj.nOffsetSub+(1:size(extendedSymbols,1));
+                % 设置新矩阵
+                X=zeros(obj.fft_size,obj.nPkts);
+                X(postiveCarrierIndex,:)=extendedSymbols;
+                % 转换为时域
+                ofdmSig=ifft(X);
+                % 加入CP
+                ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
+                % 并串转换
+                ofdmSig = ofdmSig(:);
+            else
+                % 不加入任何前缀 或者 后缀 循环载波
+                % 数据载波位置
+                postiveCarrierIndex=obj.nOffsetSub+(1:obj.nModCarriers);
+                % 设置新矩阵
+                X=zeros(obj.fft_size,obj.nPkts);
+                X(postiveCarrierIndex,:)=qam_signal;
+                % 转换为时域
+                ofdmSig=ifft(X);
+                % 加入CP
+                ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
+                % 并串转换
+                ofdmSig = ofdmSig(:);
+            end
+        end
+
+
         function [data,symbols_prbs]=prbs_bits(obj)
             %参数：obj.prbsOrder，NSym，M
             %采用prbs码生成基本数据
             data = prbs1(obj.prbsOrder,obj.NSym*log2(obj.M),0);
             data_2bit=reshape(data,log2(obj.M),[]);
-%                         symbols_prbs1 = 2.^(0:log2(obj.M)-1)*data_2bit;
-            %             symbols_prbs = reshape(symbols_prbs,obj.nModCarriers,[]);
+            % symbols_prbs1 = 2.^(0:log2(obj.M)-1)*data_2bit;
+            % symbols_prbs = reshape(symbols_prbs,obj.nModCarriers,[]);
             symbols_prbs=double(data_2bit);
 
             %进行重组，映射
@@ -127,22 +204,22 @@ classdef OFDMQAMN < handle
             rng(obj.order);
             %参数：obj.prbsOrder，NSym，M
             symbols_rand=randi([0,1],log2(obj.M),obj.NSym);
-            %             symbols_rand=randi([0 log2(obj.M)-1],obj.nModCarriers,obj.nPkts);
-            %             symbols_rand = 2.^(0:log2(obj.M)-1)*data_bit;
+            %symbols_rand=randi([0 log2(obj.M)-1],obj.nModCarriers,obj.nPkts);
+            %symbols_rand = 2.^(0:log2(obj.M)-1)*data_bit;
         end
 
 
         function qam_signal=qam(obj,symbols)
 
-            %             qam_signal = qammod(symbols,obj.M);% 使用MATLAB自带的qammod函数进行qam调制
-%             qam_signal=qammod(symbols,obj.M,'InputType','bit') ;
+            %qam_signal = qammod(symbols,obj.M);% 使用MATLAB自带的qammod函数进行qam调制
+            %qam_signal=qammod(symbols,obj.M,'InputType','bit') ;
             qam_signal=qammod(symbols,obj.M,'InputType','bit','UnitAveragePower',1) ;
             qam_signal = reshape(qam_signal,obj.nModCarriers,[]);
         end
 
         %ofdm信号生成
         function [ofdm_signal,postiveCarrierIndex] = ofdm(obj,qam_signal)
-            % ofdm have two systerms as gapped OFDM and the interleaved OFDM 
+            % ofdm have two systerms as gapped OFDM and the interleaved OFDM
             % gapped OFDM :  1,2,3……size/2 装载数据
             % interleaved OFDM：1,3,5,7……size-1 装载数据
             %信号在矩阵中的位置
@@ -150,13 +227,64 @@ classdef OFDMQAMN < handle
             % nOffsetSub 行置零
             ofdmSig = ifft([zeros(obj.nOffsetSub,obj.nPkts);qam_signal;zeros(obj.fft_size-obj.nModCarriers-obj.nOffsetSub,obj.nPkts)]);
             % 第一行置零 ，第二行上载波信号，后续置零
-%             ofdmSig = ifft([zeros(1,obj.nPkts);qam_signal;zeros(obj.fft_size-obj.nModCarriers-1,obj.nPkts)]);
+            %             ofdmSig = ifft([zeros(1,obj.nPkts);qam_signal;zeros(obj.fft_size-obj.nModCarriers-1,obj.nPkts)]);
             ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
             % 并串转换
             ofdmSig = ofdmSig(:);
             % 归一化
             scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
             ofdm_signal = ofdmSig./scale_factor;
+        end
+
+        % 脉冲成型
+        function hsqrt = get.hsqrt(obj)
+
+            hsqrt = rcosdesign(obj.psfRollOff,obj.psfLength,obj.Nsam,obj.psfShape);  %设计根升余弦脉冲成型滤波器
+
+        end
+
+        function signal = MakeFilter(obj,qam_signal,hsqrt)
+            % Upsample the data
+            upam_signal = upsample(qam_signal,obj.Nsam);
+            signal=conv(upam_signal,hsqrt,'same');
+        end
+
+
+        function psf = get.psf(obj)
+            psf = fdesign.pulseshaping( obj.Nsam, obj.psfshape, ...
+                'Nsym,beta', obj.psfLength, obj.psfRollOff);
+        end
+
+        function sig = DoFilter(obj,qam_signal)
+            % Design the filter and get its frequencey response
+            aux = design( obj.psf );
+            hf = [ aux.Numerator, zeros( 1, ( obj.NSym - obj.psfLength ) * obj.Nsam - 1 ) ];
+            hf = circshift( hf, [ 0, -obj.Nsam * obj.psfLength / 2 ] );
+            % Upsample the data
+            useq = upsample(qam_signal, obj.Nsam );
+            sig = ifft( fft( useq ) .* fft( hf ) );
+        end
+
+        function plotSpectrum(obj)
+            [y1,y2,Signal,~] = obj.Output();
+
+            figure;
+            f = obj.Fs * linspace( -0.5, 0.5, length(Signal) ).' / 1e9;
+            plot( f, fftshift(10*log10(abs(fft(Signal))))); hold on;
+            grid on;
+            axis( [ obj.Fs / 2e9 * [ -1, 1 ], -70, 40 ] )
+
+            figure;
+            f = obj.Fs * linspace( -0.5, 0.5, length(y1) ).' / 1e9;
+            plot( f, fftshift(10*log10(abs(fft(y1))))); hold on;
+            grid on;
+            axis( [ obj.Fs / 2e9 * [ -1, 1 ], -70, 40 ] )
+
+            figure;
+            f = obj.Fs * linspace( -0.5, 0.5, length(y2) ).' / 1e9;
+            plot( f, fftshift(10*log10(abs(fft(y2))))); hold on;
+            grid on;
+            axis( [ obj.Fs / 2e9 * [ -1, 1 ], -70, 40 ] )
         end
 
         function normalized_signal = nor(obj,signal)
@@ -229,57 +357,6 @@ classdef OFDMQAMN < handle
                     end
             end
         end
-
-        function hsqrt = get.hsqrt(obj)
-
-            hsqrt = rcosdesign(obj.psfRollOff,obj.psfLength,obj.Nsam,obj.psfShape);  %设计根升余弦脉冲成型滤波器
-
-        end
-
-        function signal = MakeFilter(obj,qam_signal,hsqrt)
-            % Upsample the data
-            upam_signal = upsample(qam_signal,obj.Nsam);
-            signal=conv(upam_signal,hsqrt,'same');
-        end
-
-
-        function psf = get.psf(obj)
-            psf = fdesign.pulseshaping( obj.Nsam, obj.psfshape, ...
-                'Nsym,beta', obj.psfLength, obj.psfRollOff);
-        end
-
-        function sig = DoFilter(obj,qam_signal)
-            % Design the filter and get its frequencey response
-            aux = design( obj.psf );
-            hf = [ aux.Numerator, zeros( 1, ( obj.NSym - obj.psfLength ) * obj.Nsam - 1 ) ];
-            hf = circshift( hf, [ 0, -obj.Nsam * obj.psfLength / 2 ] );
-            % Upsample the data
-            useq = upsample(qam_signal, obj.Nsam );
-            sig = ifft( fft( useq ) .* fft( hf ) );
-        end
-
-        function plotSpectrum(obj)
-            [y1,y2,Signal,~] = obj.Output();
-
-            figure;
-            f = obj.Fs * linspace( -0.5, 0.5, length(Signal) ).' / 1e9;
-            plot( f, fftshift(10*log10(abs(fft(Signal))))); hold on;
-            grid on;
-            axis( [ obj.Fs / 2e9 * [ -1, 1 ], -70, 40 ] )
-
-            figure;
-            f = obj.Fs * linspace( -0.5, 0.5, length(y1) ).' / 1e9;
-            plot( f, fftshift(10*log10(abs(fft(y1))))); hold on;
-            grid on;
-            axis( [ obj.Fs / 2e9 * [ -1, 1 ], -70, 40 ] )
-
-            figure;
-            f = obj.Fs * linspace( -0.5, 0.5, length(y2) ).' / 1e9;
-            plot( f, fftshift(10*log10(abs(fft(y2))))); hold on;
-            grid on;
-            axis( [ obj.Fs / 2e9 * [ -1, 1 ], -70, 40 ] )
-        end
-
 
     end
 end

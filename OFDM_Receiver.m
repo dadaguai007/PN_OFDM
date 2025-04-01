@@ -22,7 +22,7 @@ classdef OFDM_Receiver < handle
                 obj.Implementation.qam_signal   = varargin{8};% 调制信号参考矩阵
 
                 obj.Button.CPE_Status           = varargin{9};% 默认 关闭 CPE
-                obj.Button.PN_Total_Carrier     = varargin{10};% 默认 关闭 CPE
+                obj.Button.PN_Total_Carrier     = varargin{10};% 默认 关闭 所有载波相除相噪
                 obj.Button.receive_type         = varargin{11};% 默认 直接接收
                 
             else
@@ -88,6 +88,7 @@ classdef OFDM_Receiver < handle
             fprintf('Num of Errors = %d, BER = %1.7f\n',num,ber);
         end
 
+        % 输入QAM信号进行解码
         function [ber,num]=Direcct_Cal_BER(obj,ReceivedSignal)
             % 信号解码
             qam_bit=obj.hard_decision(ReceivedSignal);
@@ -158,6 +159,22 @@ classdef OFDM_Receiver < handle
             % 还需添加直流项
             ofdm_signal=ofdm_signal+Dc;
         end
+        
+        % 拆分分组
+        function [DataGroup,processedGroups]=GroupDemodulation(obj,ReceivedSignal,Grop_index)
+            % 分组 解码
+            DataGroup = cell(1, obj.ofdmPHY.L);
+            processedGroups=cell(1,obj.ofdmPHY.L);
+            for i=1:obj.ofdmPHY.L
+                carrier_index=Grop_index(i,:);
+                data_group=ReceivedSignal(carrier_index,:);
+                DataGroup{i} = data_group;
+                if strcmp(obj.Button.Cyclic,'CP_CS')
+                    % 去除前缀和后缀载波
+                    processedGroups{i}= data_group(obj.ofdmPHY.L_cp+1:end-obj.ofdmPHY.L_cs,:); % 去除CP/CS
+                end
+            end
+        end
 
         % 去除CP
         function CP_remove_sig=Remove_CP(obj,ReceivedSignal)
@@ -210,6 +227,8 @@ classdef OFDM_Receiver < handle
             CP_remove_Reconstruct=obj.Remove_CP(ReconstructSignal);
             % 重构信号 / 接收信号
             phi_est=angle(CP_remove_Receiver./CP_remove_Reconstruct);
+%             % 相位差估计
+%             phi_diff = angle(conj(CP_remove_Reconstruct) .* CP_remove_Receiver);
 %             phi_est=LPF(phi_est,obj.ofdmPHY.Fs,10e9);
             % 补偿
             data=CP_remove_Receiver.*exp(-1j.*phi_est);

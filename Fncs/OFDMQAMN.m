@@ -115,7 +115,7 @@ classdef OFDMQAMN < handle
             qam_signal=obj.qam(symbols);
 
             %ofdm生成波形
-            [Grop_index,ofdm_signal,postiveCarrierIndex] = obj.Grop_ofdm(qam_signal,L,L_cp,L_cs);
+            [ofdm_signal,Ref_martix,Grop_index,postiveCarrierIndex] = obj.Grop_ofdm(qam_signal,L,L_cp,L_cs);
             %重采样
             signal =resample(ofdm_signal,obj.Fs,obj.Rs);
             SigI=real(signal);
@@ -126,7 +126,7 @@ classdef OFDMQAMN < handle
 
         % 分组OFDM
         % 在每组载波组中，加入循环载波，需要注意 信号矩阵 的载波 总数 不高于 设置的 信号频率（即从信号频域，进行数据的倒推）
-        function [Grop_index,ofdmSig,postiveCarrierIndex]=Grop_ofdm(obj,qam_signal,L,L_cp,L_cs)
+        function [ofdmSig,Ref_martix,Grop_index,postiveCarrierIndex]=Grop_ofdm(obj,qam_signal,L,L_cp,L_cs)
             % L组 ， 每组len_carrier个载波
             len_carrier=obj.nModCarriers/L;
             % 子载波的顺序索引
@@ -148,7 +148,7 @@ classdef OFDMQAMN < handle
                     sum_index=len_carrier+L_cp+L_cs;
                     % 创建新的载波索引：
                     data_index=sum_index*(num-1)+1:sum_index*num;
-                    % 放置于载波数组中
+                    % 放置于载波数组中，可用于当做参考分量
                     extendedSymbols(data_index,:) = [cp; group; cs];
                 end
                 % 数据载波位置
@@ -162,6 +162,9 @@ classdef OFDMQAMN < handle
                 ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
                 % 并串转换
                 ofdmSig = ofdmSig(:);
+
+                % 参考向量组
+                Ref_martix=extendedSymbols;
             else
                 % 不加入任何前缀 或者 后缀 循环载波
                 % 数据载波位置
@@ -175,6 +178,9 @@ classdef OFDMQAMN < handle
                 ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
                 % 并串转换
                 ofdmSig = ofdmSig(:);
+
+                % 参考向量
+                Ref_martix=qam_signal;
             end
         end
 

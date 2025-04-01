@@ -11,7 +11,7 @@ classdef OFDM_Receiver < handle
 
     methods
         function obj = OFDM_Receiver(varargin)
-            if numel(varargin) == 10
+            if numel(varargin) == 11
                 obj.ofdmPHY                     = varargin{1} ;% 传递而来的OFDM 参数
                 obj.Nr.fOsc                     = varargin{2};
                 obj.Nr.fUp                      = varargin{3};
@@ -22,7 +22,9 @@ classdef OFDM_Receiver < handle
                 obj.Implementation.qam_signal   = varargin{8};% 调制信号参考矩阵
 
                 obj.Button.CPE_Status           = varargin{9};% 默认 关闭 CPE
-                obj.Button.receive_type         = varargin{10};% 默认 直接接收
+                obj.Button.PN_Total_Carrier     = varargin{10};% 默认 关闭 CPE
+                obj.Button.receive_type         = varargin{11};% 默认 直接接收
+                
             else
                 error('Number of input variables must be either 0 (default values) or 10');
             end
@@ -52,11 +54,12 @@ classdef OFDM_Receiver < handle
             compSig = hn.*phi;
         end
         % 信号预处理
-        function  ReceivedSignal=Preprocessed_signal(obj,rxsig)
+        function  [ReceivedSignal,Dc]=Preprocessed_signal(obj,rxsig)
             if strcmp(obj.Button.receive_type,'KK')
                 c=0;
+                Dc=mean(rxsig);
                 % KK
-                [SSB_Sig_KK,ln_sig]=obj.KK_receiver(rxsig+c);
+                [SSB_Sig_KK,~]=obj.KK_receiver(rxsig.'+c);
 
                 %下采样
                 ReceivedSignal = downsample(SSB_Sig_KK,obj.Nr.fUp/obj.Nr.fOsc);
@@ -64,6 +67,7 @@ classdef OFDM_Receiver < handle
             elseif strcmp(obj.Button.receive_type,'DD')
                 % 不使用KK算法，使用带宽隔开,需要去除DC
                 % DC-remove
+                Dc=mean(rxsig);
                 rxsig=rxsig-mean(rxsig);
                 ReceivedSignal=pnorm(rxsig);
             end
@@ -75,16 +79,28 @@ classdef OFDM_Receiver < handle
 
         function [ber,num]=Cal_BER(obj,ReceivedSignal)
             % 解调算法
-            [~,~,~,data_qam]=obj.Demodulation(ReceivedSignal);
+            [~,~,~,~,qam_bit]=obj.Demodulation(ReceivedSignal);
             % label信号
-            ref_seq =qamdemod(ref,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);
+            ref_seq =qamdemod(obj.Implementation.ref ,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);
             ref_seq=ref_seq(:);
             % 计算误码率
-            [ber,num,~] = CalcBER(data_qam,ref_seq);
+            [ber,num,~] = CalcBER(qam_bit,ref_seq);
             fprintf('Num of Errors = %d, BER = %1.7f\n',num,ber);
         end
 
-        function [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam]=Demodulation(obj,ReceivedSignal)
+        function [ber,num]=Direcct_Cal_BER(obj,ReceivedSignal)
+            % 信号解码
+            qam_bit=obj.hard_decision(ReceivedSignal);
+            % label信号
+            ref_seq =qamdemod(obj.Implementation.ref ,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);
+            ref_seq=ref_seq(:);
+            % 计算误码率
+            [ber,num,~] = CalcBER(qam_bit,ref_seq);
+            fprintf('Num of Errors = %d, BER = %1.7f\n',num,ber);
+        end
+
+        % 解调
+        function [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Demodulation(obj,ReceivedSignal)
 
             % 解OFDM
             signal_ofdm = reshape(ReceivedSignal, obj.ofdmPHY.fft_size+ obj.ofdmPHY.nCP,[]); % 转换为矩阵形式
@@ -93,13 +109,17 @@ classdef OFDM_Receiver < handle
             % 存储矩阵形式的OFDM 信号
             signal_ofdm_martix=signal_ofdm;
             % get the modulated data carriers
-            data_ofdm = signal_ofdm(obj.ofdmPHY.postiveCarrierIndex,:);
+            data_ofdm = signal_ofdm(obj.ofdmPHY.dataCarrierIndex,:);
             % 信道均衡
             [data_ofdm,Hf]=obj.one_tap_equalization(data_ofdm);
 
             % CPE compensation
             if strcmp(obj.Button.CPE_Status,'on')
-                data_ofdm=CPE_Eliminate(data_ofdm);
+                data_ofdm=obj.CPE_Eliminate(data_ofdm);
+            end
+
+            if strcmp(obj.Button.PN_Total_Carrier,'on')
+                data_ofdm=obj.PN_Total_Eliminate(data_ofdm);
             end
 
             %保留信号矩阵
@@ -107,18 +127,24 @@ classdef OFDM_Receiver < handle
             %归一化
             data_ofdm=data_ofdm(:);% 矩阵转换为行向量
             data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
-            % 硬判决
-            data_qam=hard_decision(data_ofdm);
+            % 硬判决 为 最近的星座点
+            data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);
+            % 硬判决 为bit
+            qam_bit=obj.hard_decision(data_ofdm);
 
         end
-
-        function ofdmSig=Remodulation(obj,ReceivedSignal)
-            % 解调获得 信号
-            [~,~,~,data_qam]=obj.Demodulation(ReceivedSignal);
+        % 重新生成满足条件的复数信号，  不是平方接收的实数信号
+        function ofdm_signal=Remodulation(obj,ReceivedSignal,Dc)
+            % 解调获得 信号  和 信道响应
+            [~,~,Hf,data_qam,~]=obj.Demodulation(ReceivedSignal);
+            % 转换为矩阵形式
+            data_qam_martix=reshape(data_qam,obj.ofdmPHY.nModCarriers,[]);
+            % 信道响应 叠加
+            H_data_qam_martix=data_qam_martix.*Hf;
             % 重新调制
             % nOffsetSub 行置零 ,positive 放置qam ， 后续置零
             X= ([zeros(obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts);...
-                data_qam; ...
+                H_data_qam_martix; ...
                 zeros(obj.ofdmPHY.fft_size-obj.ofdmPHY.nModCarriers-obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts)]);
             % 转换为时域
             ofdmSig=ifft(X);
@@ -126,8 +152,21 @@ classdef OFDM_Receiver < handle
             ofdmSig = [ofdmSig(end-obj.ofdmPHY.nCP+1:end,:);ofdmSig];
             % 并串转换
             ofdmSig = ofdmSig(:);
+            % 归一化
+            scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
+            ofdm_signal = ofdmSig./scale_factor;
+            % 还需添加直流项
+            ofdm_signal=ofdm_signal+Dc;
         end
 
+        % 去除CP
+        function CP_remove_sig=Remove_CP(obj,ReceivedSignal)
+            % 解OFDM
+            signal_ofdm = reshape(ReceivedSignal, obj.ofdmPHY.fft_size+ obj.ofdmPHY.nCP,[]); % 转换为矩阵形式
+            signal_ofdm(1: obj.ofdmPHY.nCP,:) = [];% 去除CP
+            %  矩阵转换为行向量
+            CP_remove_sig=signal_ofdm(:);
+        end
 
         % ZF信道均衡
         function [data_kk,Hf]=one_tap_equalization(obj,data_ofdm)
@@ -139,10 +178,10 @@ classdef OFDM_Receiver < handle
             Hf = mean(rxTrainSymbol./refTrainSymbol,2);
 
             % channel equalization
-            data_kk = data_ofdm.*repmat(1./Hf,1,obj.Nr.nPkts);
+            data_kk = data_ofdm.*repmat(1./Hf,1,obj.ofdmPHY.nPkts);
 
         end
-        % 相位均衡
+        % 相位均衡 CPE
         function data=CPE_Eliminate(obj,data_ofdm)
 
             phi_mean=angle(mean(data_ofdm(obj.Nr.pilotIndex,:)./...
@@ -152,6 +191,38 @@ classdef OFDM_Receiver < handle
             data=data_ofdm.*...
                 repmat(exp(-1j.*phi_mean),size(data_ofdm,1),1);
         end
+
+        function data=PN_Total_Eliminate(obj,data_ofdm)
+
+            phi_mean=angle((data_ofdm(obj.Nr.pilotIndex,:)./...
+                 obj.Implementation.qam_signal(obj.Nr.pilotIndex,:)));
+
+
+            data=data_ofdm.*...
+                (exp(-1j.*phi_mean));
+        end
+
+        % 时域去除PN
+        function  [phi_est,data]=Time_Phase_Eliminate(obj,ReceivedSignal,ReconstructSignal)
+            % 该方法，不适用直接接收的OFDM系统，接收信号不是所谓的复数信号，而是实数信号，出现较大的误差
+            % 去除 CP
+            CP_remove_Receiver=obj.Remove_CP(ReceivedSignal);
+            CP_remove_Reconstruct=obj.Remove_CP(ReconstructSignal);
+            % 重构信号 / 接收信号
+            phi_est=angle(CP_remove_Receiver./CP_remove_Reconstruct);
+%             phi_est=LPF(phi_est,obj.ofdmPHY.Fs,10e9);
+            % 补偿
+            data=CP_remove_Receiver.*exp(-1j.*phi_est);
+            % 转换为矩阵形式
+            data_martix= reshape(data, obj.ofdmPHY.fft_size,[]); % 转换为矩阵形式
+            % 添加CP
+            data_martix = [data_martix(end-obj.ofdmPHY.nCP+1:end,:);data_martix];
+            % 并串转换
+            data=data_martix(:);
+            % 关闭所有消除
+            obj.Button.PN_Total_Carrier='off';
+        end
+
         % 硬判决
         function data_qam=hard_decision(obj,Receiver_data)
             data_qam = qamdemod(Receiver_data,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);
@@ -185,7 +256,7 @@ classdef OFDM_Receiver < handle
 
         % 星座图绘制
         function scatter_plot(obj,ReceivedSignal)
-            [~,data_ofdm_martix,~,~]=obj.Demodulation(ReceivedSignal);
+            [~,data_ofdm_martix,~,~,~]=obj.Demodulation(ReceivedSignal);
             dara_ofdm_squ=data_ofdm_martix(:);
             scatterplot(dara_ofdm_squ);
         end

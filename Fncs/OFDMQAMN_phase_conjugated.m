@@ -29,6 +29,9 @@ classdef OFDMQAMN_phase_conjugated < handle
 
         percentage; % PCP的百分比
         Type
+
+                len;
+        dataCarrierIndex;
     end
 
     properties (Dependent = true)

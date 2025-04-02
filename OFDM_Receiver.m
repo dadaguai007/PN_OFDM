@@ -134,6 +134,7 @@ classdef OFDM_Receiver < handle
             qam_bit=obj.hard_decision(data_ofdm);
 
         end
+        
         % 重新生成满足条件的复数信号，  不是平方接收的实数信号
         function ofdm_signal=Remodulation(obj,ReceivedSignal,Dc)
             % 解调获得 信号  和 信道响应
@@ -243,6 +244,81 @@ classdef OFDM_Receiver < handle
             obj.Button.PN_Total_Carrier='off';
 
         end
+         % DD 平方接收 
+        function ofdm_time_signal=DD_Type_TimeSignal(obj,signal_ofdm_martix,Dc)
+            % 使用 去除CP 后 的频域 OFDM 矩阵
+            data_ofdm = signal_ofdm_martix(obj.ofdmPHY.dataCarrierIndex,:);
+            X= ([zeros(obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts);...
+                data_ofdm; ...
+                zeros(obj.ofdmPHY.fft_size-obj.ofdmPHY.nModCarriers-obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts)]);
+            % 转换为时域
+            ofdmSig=ifft(X);
+            % 添加CP
+            ofdmSig = [ofdmSig(end-obj.ofdmPHY.nCP+1:end,:);ofdmSig];
+            % 并串转换
+            ofdmSig = ofdmSig(:);
+            % 归一化
+            scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
+            ofdm_signal = ofdmSig./scale_factor;
+            % 还需添加直流项
+            ofdm_time_signal=ofdm_signal+Dc;
+        end
+
+        function [ber,num]=PCP_Cal_BER(obj,ReceivedSignal,index_data,index_pcp)
+            % 解调算法
+            [~,~,~,~,qam_bit]=obj.PCP_Demodulation(ReceivedSignal,index_data,index_pcp);
+            % label信号
+            ref_seq =qamdemod(obj.Implementation.ref ,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);
+            ref_seq=ref_seq(:);
+            % 计算误码率
+            [ber,num,~] = CalcBER(qam_bit,ref_seq);
+            fprintf('Num of Errors = %d, BER = %1.7f\n',num,ber);
+        end
+
+        % PCP解调
+        function [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=PCP_Demodulation(obj,ReceivedSignal,index_data,index_pcp)
+
+            % 解OFDM
+            signal_ofdm = reshape(ReceivedSignal, obj.ofdmPHY.fft_size+ obj.ofdmPHY.nCP,[]); % 转换为矩阵形式
+            signal_ofdm(1: obj.ofdmPHY.nCP,:) = [];% 去除CP
+            signal_ofdm = fft(signal_ofdm);
+            % 存储矩阵形式的OFDM 信号
+            signal_ofdm_martix=signal_ofdm;
+            % get the modulated data carriers
+            data_ofdm = signal_ofdm(obj.ofdmPHY.dataCarrierIndex,:);
+            % 信道均衡
+            [data_ofdm,Hf]=obj.one_tap_equalization(data_ofdm);
+
+            % CPE compensation
+            if strcmp(obj.Button.CPE_Status,'on')
+                data_ofdm=obj.CPE_Eliminate(data_ofdm);
+            end
+
+            if strcmp(obj.Button.PN_Total_Carrier,'on')
+                data_ofdm=obj.PN_Total_Eliminate(data_ofdm);
+            end
+            % 相位共轭进行处理
+            % 找到索引
+            data_index=index_data-obj.ofdmPHY.nOffsetSub;
+            pcp_index=index_pcp-obj.ofdmPHY.nOffsetSub;
+            % 选取共轭数据
+            data_ofdm_data=data_ofdm(data_index,:);
+            data_ofdm_pcp=data_ofdm(pcp_index,:);
+
+            %   共轭消除 得到恢复信号
+            data_ofdm=(data_ofdm_data+conj(data_ofdm_pcp))/2;
+            %保留信号矩阵
+            data_ofdm_martix=data_ofdm;
+            %归一化
+            data_ofdm=data_ofdm(:);% 矩阵转换为行向量
+            data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
+            % 硬判决 为 最近的星座点
+            data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);
+            % 硬判决 为bit
+            qam_bit=obj.hard_decision(data_ofdm);
+
+        end
+
 
         % 硬判决
         function data_qam=hard_decision(obj,Receiver_data)

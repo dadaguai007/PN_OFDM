@@ -1,7 +1,10 @@
+% PCP 方式 ， 采用DD 探测
 clear;close all;clc;
 addpath('Fncs\')
 addpath('D:\PhD\Codebase\')
 % addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+
+% 信号发射机 DD 配置
 OFDM_TX_phase_conjugated;
 % 生成信号
 [y1,y2,signal,qam_signal,index_data,index_pcp,qam_mat_phase]=nn.Output();
@@ -73,13 +76,6 @@ paramPD.type = 'ideal';
 paramPD.Fs=fs;
 
 
-
-% 重复信号
-k=1;
-% qam信号矩阵
-ref_seq_mat=repmat(qam_signal,1,k);
-
-
 %noise
 %sigTxo=awgn(sigTxo,snr(index),'measured');
 
@@ -102,49 +98,24 @@ ipd_btb = pd(sigRxo, paramPD);
 mon_ESA(ipd_btb,fs);
 
 
-% CPE compensation 参数
-CPE_Status='off';
-if strcmp(CPE_Status,'on')
-    W=160;
-    pilotIndex=1:2:W;
-end
+% 发射机参数
+ofdmPHY=nn;
+%%---------------------------------------        解码       ---------------------------%%
+Receiver=OFDM_Receiver( ...
+                        ofdmPHY, ...       %%% 发射机传输的参数
+                        ofdmPHY.Fs, ...    %   采样
+                        6*ofdmPHY.Fs, ...  % 上采样
+                        ofdmPHY.nPkts, ...            % 信道训练长度
+                        1:1:ofdmPHY.nModCarriers, ...    %导频位置
+                        1, ...             % 选取第一段信号
+                        ref_seq, ...       % 参考序列
+                        qam_mat_phase, ...    % qam_pcp 矩阵
+                        'off', ...         % 是否采用CPE
+                        'off', ...         % 对所有载波进行相位补偿
+                        'DD');             % 接收方式
 
-% 按顺序解码
-OFDM_Decode_squence_pcp;
+% 信号预处理
+[ReceivedSignal,Dc]=Receiver.Preprocessed_signal(ipd_btb);
+% BER 计算
+[ber,num]=Receiver.PCP_Cal_BER(ReceivedSignal,index_data,index_pcp);
 
-
-
-
-% Rx_16QAM
-data_kk_mat;
-% scatterplot(data_kk_mat(1,:));
-% 第i个载波上的相噪分布(相位共轭后的相噪分布)
-jj=1;
-phase_jj=angle(data_kk_mat(jj,:)./qam_signal_mat(jj,:));
-% PRT方差
-phase_var=var(phase_jj);
-% 功率
-PRT_power=signalpower(phase_jj);
-fprintf('PRT_power = %1.7f\n',PRT_power);
-
-figure;
-plot(phase_jj)
-xlabel('symbol')
-ylabel('phas fluctuation/rad')
-
-
-% 星座图
-scatterplot(data_rec);
-
-% 第一个载波的相位估计量
-index=1;
-P_index=data_kk_data(index,:).*data_kk_pcp(index,:);
-P_index_amp=abs(data_kk_data(1,:)).^2;
-% 相位
-Pn_p=angle(P_index./P_index_amp)/2;
-
-
-figure;
-plot(Pn_p)
-xlabel('symbol')
-ylabel('P subcarrier phas fluctuation/rad')

@@ -1,5 +1,5 @@
 % MATLAB 代码：基于线性最小均方误差（LMMSE）估计方法的相噪估计
-
+% 不使用
 % 清空工作区和命令窗口
 clear;
 clc;
@@ -33,11 +33,11 @@ for m = 1:numSymbols
     % 相噪影响
     phi_m = phi((m-1)*N+1:m*N);
     X_m = ifft(X(:, m));
-    X_m_noisy = X_m .* exp(1i * phi_m);
+    X_m_noisy = (X_m.') .* exp(1i * phi_m);
     X_m_noisy = fft(X_m_noisy);
 
     % 信道影响
-    X_m_noisy = X_m_noisy .* h(:, m);
+    X_m_noisy = (X_m_noisy.') .* h(:, m);
 
     % 加性高斯噪声
     noise = (randn(N, 1) + 1i * randn(N, 1)) / sqrt(2);

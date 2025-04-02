@@ -1,8 +1,8 @@
 % PCP 方式 ， 采用KK 探测
 clear;close all;clc;
 addpath('Fncs\')
-addpath('D:\PhD\Codebase\')
-% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+% addpath('D:\PhD\Codebase\')
+addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 
 % 信号发射机 KK  配置
 OFDM_TX_phase_conjugated;

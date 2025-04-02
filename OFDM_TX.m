@@ -5,8 +5,8 @@ nn.DataType='rand';%两个选项：prbs，rand
 nn.fft_size = 1024;
 nn.nPkts = 1000;
 nn.nCP = 32;
-nn.nModCarriers = 400;
-nn.nOffsetSub =2; 
+nn.nModCarriers = 100;
+nn.nOffsetSub =100; 
 % total symbol
 nn.NSym = nn.nModCarriers*nn.nPkts;
 nn.order = 20;

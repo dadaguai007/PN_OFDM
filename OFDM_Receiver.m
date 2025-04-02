@@ -226,9 +226,9 @@ classdef OFDM_Receiver < handle
             CP_remove_Receiver=obj.Remove_CP(ReceivedSignal);
             CP_remove_Reconstruct=obj.Remove_CP(ReconstructSignal);
             % 重构信号 / 接收信号
-            phi_est=angle(CP_remove_Receiver./CP_remove_Reconstruct);
+%             phi_est=angle(CP_remove_Receiver./CP_remove_Reconstruct);
 %             % 相位差估计
-%             phi_diff = angle(conj(CP_remove_Reconstruct) .* CP_remove_Receiver);
+            phi_est = angle(conj(CP_remove_Reconstruct) .* CP_remove_Receiver);
 %             phi_est=LPF(phi_est,obj.ofdmPHY.Fs,10e9);
             % 补偿
             data=CP_remove_Receiver.*exp(-1j.*phi_est);
@@ -240,6 +240,7 @@ classdef OFDM_Receiver < handle
             data=data_martix(:);
             % 关闭所有消除
             obj.Button.PN_Total_Carrier='off';
+
         end
 
         % 硬判决

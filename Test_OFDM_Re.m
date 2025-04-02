@@ -1,7 +1,7 @@
 clear;close all;clc;
 addpath('Fncs\')
-addpath('D:\PhD\Codebase\')
-% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+% addpath('D:\PhD\Codebase\')
+addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % 发射机配置
 OFDM_TX;
 % 生成信号
@@ -101,7 +101,7 @@ Receiver=OFDM_Receiver( ...
                         ofdmPHY, ...       %%% 发射机传输的参数
                         ofdmPHY.Fs, ...    %   采样
                         6*ofdmPHY.Fs, ...  % 上采样
-                        100, ...            % 信道训练长度
+                        ofdmPHY.nPkts, ...            % 信道训练长度
                         1:1:ofdmPHY.nModCarriers, ...    %导频位置
                         1, ...             % 选取第一段信号
                         ref_seq, ...       % 参考序列
@@ -123,9 +123,27 @@ index_carrier=60;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
 % 重构信号
-Re_ofdmSig=Receiver.Remodulation(ReceivedSignal,0);
-% 时域处理
+Re_ofdmSig=Receiver.Remodulation(ReceivedSignal,Dc);
+% % % 时域处理
 [phi_est,data]=Receiver.Time_Phase_Eliminate(ReceivedSignal,Re_ofdmSig);
 [ber1,num1]=Receiver.Cal_BER(data);
 
+data_ofdm = signal_ofdm_martix(Receiver.ofdmPHY.dataCarrierIndex,:);
+X= ([zeros(Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts);...
+    data_ofdm; ...
+    zeros(Receiver.ofdmPHY.fft_size-Receiver.ofdmPHY.nModCarriers-Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts)]);
+% 转换为时域
+ofdmSig=ifft(X);
+% 添加CP
+ofdmSig = [ofdmSig(end-Receiver.ofdmPHY.nCP+1:end,:);ofdmSig];
+% 并串转换
+ofdmSig = ofdmSig(:);
+% 归一化
+scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
+ofdm_signal = ofdmSig./scale_factor;
+% 还需添加直流项
+ofdm_signal=ofdm_signal+Dc;
 
+% 时域处理
+[phi_est,data]=Receiver.Time_Phase_Eliminate(ofdm_signal,Re_ofdmSig);
+[ber1,num1]=Receiver.Cal_BER(data);

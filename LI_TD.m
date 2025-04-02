@@ -3,6 +3,7 @@
 % 作者: Peyman Neshaastegaran, Ming Jian
 % 实现功能: 适用于高SNR无线回传链路的OFDM系统相位噪声抑制
 
+% 代码作用： 如何初始化  估计相噪
 clear all; close all; clc;
 
 %% 系统参数设置

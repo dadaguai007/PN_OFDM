@@ -33,11 +33,11 @@ for m = 1:numSymbols
     % 相噪影响
     phi_m = phi((m-1)*N+1:m*N);
     X_m = ifft(X(:, m));
-    X_m_noisy = X_m .* exp(1i * phi_m);
-    X_m_noisy = fft(X_m_noisy);
+    x_m_noisy = (X_m.') .* exp(1i * phi_m);
+    X_m_noisy = fft(x_m_noisy);
 
     % 信道影响
-    X_m_noisy = X_m_noisy .* h(:, m);
+    X_m_noisy = (X_m_noisy.') .* h(:, m);
 
     % 加性高斯噪声
     noise = (randn(N, 1) + 1i * randn(N, 1)) / sqrt(2);

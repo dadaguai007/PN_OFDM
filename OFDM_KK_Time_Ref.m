@@ -5,24 +5,8 @@ addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % 发射机配置
 OFDM_TX;
 % 生成信号
-% [y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();
-% label = nn.ofdm(qam_signal);
-
-% 参数
-L=10;
-L_cp=2;
-L_cs=2;
-% 生成分组 OFDM信号
-[signal,qam_signal,postiveCarrierIndex,Grop_index]=nn.Output_Group(L, ... % 分组数量
-                                                                   L_cp, ...
-                                                                   L_cs);
-
-% 参考信号
-[label,Ref_martic,~,~]= nn.Grop_ofdm(qam_signal,L,L_cp,L_cs);
-
-% 需要生成新的qam信号参考矩阵，用于信道均衡，相噪估计
-Ref_martic;
-
+[y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();
+label = nn.ofdm(qam_signal);
 
 % System Parameters
 fs=nn.Fs;
@@ -49,9 +33,7 @@ CSPR_Mea;
 
 %参考信号
 ref_seq=reshape(qam_signal,1,[]);
-ref_seq = repmat(ref_seq,1,10);
-
-
+ref_seq = repmat(ref_seq,1,100);
 
 %%---------------------------------------          Laser           ----------------------------%%
 % Generate LO field with phase noise
@@ -70,7 +52,7 @@ signal_TXO=signal_TX.*sigLO;
 
 % fiber param
 param=struct();
-param.Ltotal = 100; %km
+param.Ltotal = 700; %km
 param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
@@ -119,7 +101,7 @@ Receiver=OFDM_Receiver( ...
                         ofdmPHY, ...       %%% 发射机传输的参数
                         ofdmPHY.Fs, ...    %   采样
                         6*ofdmPHY.Fs, ...  % 上采样
-                        100, ...            % 信道训练长度
+                        ofdmPHY.nPkts, ...            % 信道训练长度
                         1:1:ofdmPHY.nModCarriers, ...    %导频位置
                         1, ...             % 选取第一段信号
                         ref_seq, ...       % 参考序列
@@ -137,49 +119,34 @@ Receiver=OFDM_Receiver( ...
 [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
 
 % 相噪
-index_carrier=120;
+index_carrier=60;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
-Receiver.Button.Cyclic='none';
-Receiver.ofdmPHY.L=L;
-[DataGroup,processedGroups]=Receiver.GroupDemodulation(data_ofdm_martix,Grop_index);
+%%%% 直接使用参考qam矩阵进行进行相噪消除
 
+% 转换为矩阵形式
+data_qam_martix=reshape(qam_signal,Receiver.ofdmPHY.nModCarriers,[]);
+% 信道响应 叠加
+H_data_qam_martix=data_qam_martix.*Hf;
+% 重新调制
+% nOffsetSub 行置零 ,positive 放置qam ， 后续置零
+X= ([zeros(Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts);...
+    H_data_qam_martix; ...
+    zeros(Receiver.ofdmPHY.fft_size-Receiver.ofdmPHY.nModCarriers-Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts)]);
+% 转换为时域
+ofdmSig=ifft(X);
+% 添加CP
+ofdmSig = [ofdmSig(end-Receiver.ofdmPHY.nCP+1:end,:);ofdmSig];
+% 并串转换
+ofdmSig = ofdmSig(:);
+% 归一化
+scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
+ofdm_signal = ofdmSig./scale_factor;
+% 还需添加直流项
+ofdm_signal=ofdm_signal+Dc;
 
-% 分组数据合并，进行解码
-singleSubMatrix = DataGroup{1};
-for i=2:L
-    SubMatrix = DataGroup{i}; %读取元胞组
-    singleSubMatrix=cat(1,singleSubMatrix,SubMatrix);
-end
+% % % 时域处理
+[phi_est,data]=Receiver.Time_Phase_Eliminate(ReceivedSignal,ofdm_signal);
+[ber1,num1]=Receiver.Cal_BER(data);
 
-[ber1,num1]=Receiver.Direcct_Cal_BER(singleSubMatrix(:));
-
-I=singleSubMatrix-data_ofdm_martix;
-
-
-% % 分组 解码 ，解调为QAM信号后，进行分组拆分
-% DataGroup = cell(1, L);
-% processedGroups=cell(1,L);
-% for i=1:L
-%     carrier_index=Grop_index(i,:);
-%     data_group=data_ofdm_martix(carrier_index,:);
-%     DataGroup{i} = data_group;
-%     if strcmp(type,'CP_CS')
-%         % 去除前缀和后缀载波
-%         processedGroups{i}= data_group(L_cp+1:end-L_cs,:); % 去除CP/CS
-%     end
-% end
-% 
-% 
-% % % 分组数据合并，进行解码
-% % singleSubMatrix = DataGroup{1};
-% % for i=2:L
-% %     SubMatrix = DataGroup{i}; %读取元胞组
-% %     singleSubMatrix=cat(1,singleSubMatrix,SubMatrix);
-% % end
-% 
-% [ber,num]=Direcct_Cal_BER(singleSubMatrix(:));
-
-
-% 测试 分组 时域 相噪消除
-
+mon_ESA(phi_est,fs);

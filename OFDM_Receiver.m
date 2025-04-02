@@ -126,8 +126,8 @@ classdef OFDM_Receiver < handle
             %保留信号矩阵
             data_ofdm_martix=data_ofdm;
             %归一化
-            data_ofdm=data_ofdm(:);% 矩阵转换为行向量
-            data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
+%             data_ofdm=data_ofdm(:);% 矩阵转换为行向量
+%             data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
             % 硬判决 为 最近的星座点
             data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);
             % 硬判决 为bit
@@ -162,6 +162,7 @@ classdef OFDM_Receiver < handle
         
         % 拆分分组
         function [DataGroup,processedGroups]=GroupDemodulation(obj,ReceivedSignal,Grop_index)
+            
             % 分组 解码
             DataGroup = cell(1, obj.ofdmPHY.L);
             processedGroups=cell(1,obj.ofdmPHY.L);
@@ -226,9 +227,9 @@ classdef OFDM_Receiver < handle
             CP_remove_Receiver=obj.Remove_CP(ReceivedSignal);
             CP_remove_Reconstruct=obj.Remove_CP(ReconstructSignal);
             % 重构信号 / 接收信号
-%             phi_est=angle(CP_remove_Receiver./CP_remove_Reconstruct);
+            phi_est=angle(CP_remove_Receiver./CP_remove_Reconstruct);
 %             % 相位差估计
-            phi_est = angle(conj(CP_remove_Reconstruct) .* CP_remove_Receiver);
+%             phi_est = angle(conj(CP_remove_Reconstruct) .* CP_remove_Receiver);
 %             phi_est=LPF(phi_est,obj.ofdmPHY.Fs,10e9);
             % 补偿
             data=CP_remove_Receiver.*exp(-1j.*phi_est);

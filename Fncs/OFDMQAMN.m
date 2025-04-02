@@ -31,6 +31,8 @@ classdef OFDMQAMN < handle
         dataCarrierIndex;
 
         cyclic_pattern;
+
+        L; % 分组数
     end
 
     properties (Dependent = true)

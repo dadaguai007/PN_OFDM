@@ -2,8 +2,8 @@
 
 clear;close all;clc;
 addpath('Fncs\')
-addpath('D:\PhD\Codebase\')
-% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+% addpath('D:\PhD\Codebase\')
+addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % 发射机配置(需要配置为KK模式)
 OFDM_TX;
 % 生成信号
@@ -59,7 +59,7 @@ param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
 param.D = 16;
-param.gamma = 0;
+param.gamma = 1.3;
 param.Fc = 193.1e12;
 param.NF = 4.5;
 param.amp='ideal';
@@ -106,7 +106,7 @@ Receiver=OFDM_Receiver( ...
                         ofdmPHY.Fs, ...    %   采样
                         6*ofdmPHY.Fs, ...  % 上采样
                         ofdmPHY.nPkts, ...            % 信道训练长度
-                        1:1:ofdmPHY.nModCarriers, ...    %导频位置
+                        1:4:ofdmPHY.nModCarriers, ...    %导频位置
                         1, ...             % 选取第一段信号
                         ref_seq, ...       % 参考序列
                         qam_signal, ...    % qam 矩阵
@@ -133,7 +133,7 @@ Receiver.Button.PN_Total_Carrier     = 'off';% 默认 关闭 所有载波相除�
 [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
 
 % 每组数量
-Group_Num = 10;
+Group_Num = 20;
 % 每组载波所有载波 进行使用
 for m=1:Receiver.ofdmPHY.nModCarriers/Group_Num
     % 每组数据的索引

@@ -2,8 +2,8 @@
 
 clear;close all;clc;
 addpath('Fncs\')
-addpath('D:\PhD\Codebase\')
-% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+% addpath('D:\PhD\Codebase\')
+addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % 发射机配置(需要配置为KK模式)
 OFDM_TX;
 % 生成信号
@@ -126,3 +126,6 @@ Receiver=OFDM_Receiver( ...
 index_carrier=60;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
+figure;
+plot(PN_carrier)
+title('第60载波的相噪分布')

@@ -1,4 +1,4 @@
-% KK 接收 ， 时域循环迭代消除相噪
+% KK 接收 ， 有相噪
 
 clear;close all;clc;
 addpath('Fncs\')
@@ -96,6 +96,8 @@ end
 ipd_btb = pd(sigRxo, paramPD);
 mon_ESA(ipd_btb,fs);
 
+% 采用CPE补偿方式 测试
+
 % 发射机参数
 ofdmPHY=nn;
 %%---------------------------------------        解码       ---------------------------%%
@@ -124,13 +126,6 @@ Receiver=OFDM_Receiver( ...
 index_carrier=60;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
-% 时域迭代消除原理
-ofdm_time_signal=ReceivedSignal;
-for i=1:3
-    % 重构信号
-    Re_ofdmSig=Receiver.Remodulation(ReceivedSignal,Dc);
-
-    % 时域处理
-    [phi_est,ReceivedSignal]=Receiver.Time_Phase_Eliminate(ofdm_time_signal,Re_ofdmSig);
-    [ber1,num1]=Receiver.Cal_BER(ReceivedSignal);
-end
+figure;
+plot(PN_carrier)
+title('第60载波的相噪分布')

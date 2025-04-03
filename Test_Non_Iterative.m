@@ -1,4 +1,4 @@
-% KK 接收 ， 时域循环迭代消除相噪
+% KK 接收 ， Non-Iterative Estimation in Time domain
 
 clear;close all;clc;
 addpath('Fncs\')
@@ -120,17 +120,34 @@ Receiver=OFDM_Receiver( ...
 %  解调
 [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
 
-% 相噪
-index_carrier=60;
-PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
-% 时域迭代消除原理
-ofdm_time_signal=ReceivedSignal;
-for i=1:3
-    % 重构信号
-    Re_ofdmSig=Receiver.Remodulation(ReceivedSignal,Dc);
+u = 1;                  % ICI估计范围参数
+b = 7;                  % 导频块大小（需满足b >=4u+1）
 
-    % 时域处理
-    [phi_est,ReceivedSignal]=Receiver.Time_Phase_Eliminate(ofdm_time_signal,Re_ofdmSig);
-    [ber1,num1]=Receiver.Cal_BER(ReceivedSignal);
+% 以 第一个符号为例子
+pilot_pos=1:7;
+
+% 提取导频块接收信号
+R_pilot = data_ofdm_martix(pilot_pos(u+1:end-u),1); % 中间有效导频（b-2u个）
+
+% 构建X矩阵（已知导频符号）
+X = zeros(b-2*u, 2*u+1);
+% X是 导频影响矩阵
+
+% 每次选取 ICI 影响的载波数
+for k = 1:b-2*u
+    X(k,:) = qam_signal(pilot_pos(k:k+2*u),1); % 滑动窗口
 end
+
+% LS估计J_u
+J_est = pinv(X) * R_pilot; % 最小二乘解
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% 上述都能跑通 %%%%%%%%%%%%%
+% %% 相位噪声抑制（解卷积）
+% Y_clean = zeros(N_active, 1);
+% for k = 1:N_active
+%     idx = k + (-u:u); % 邻域索引
+%     idx(idx<1 | idx>N_active) = []; % 边界处理
+%     Y_clean(k) = sum(data_ofdm_martix(idx) .* conj(J_est(end:-1:1))); % 解卷积
+% end

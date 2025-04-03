@@ -2,8 +2,8 @@
 
 clear;close all;clc;
 addpath('Fncs\')
-addpath('D:\PhD\Codebase\')
-% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+% addpath('D:\PhD\Codebase\')
+addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % 发射机配置(需要配置为KK模式)
 OFDM_TX;
 % 生成信号
@@ -59,7 +59,7 @@ param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
 param.D = 16;
-param.gamma = 0;
+param.gamma = 1.3;
 param.Fc = 193.1e12;
 param.NF = 4.5;
 param.amp='ideal';
@@ -131,3 +131,7 @@ Receiver.Button.CPE_Status           = 'off';% 默认 关闭 CPE
 Receiver.Button.PN_Total_Carrier     = 'on';% 打开 所有载波相除相噪
 % BER 计算
 [ber1,num1]=Receiver.Cal_BER(ReceivedSignal);
+
+figure;
+plot(PN_carrier)
+title('第60个载波的相噪分布')

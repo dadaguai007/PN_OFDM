@@ -5,8 +5,25 @@ addpath('D:\PhD\Codebase\')
 % 发射机配置
 OFDM_TX;
 % 生成信号
-[y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();
-label = nn.ofdm(qam_signal);
+% [y1,y2,signal,qam_signal,postiveCarrierIndex]=nn.Output();
+% label = nn.ofdm(qam_signal);
+
+% 参数
+nn.cyclic_pattern='CP_CS';
+L=2;
+L_cp=2;
+L_cs=2;
+% 生成分组 OFDM信号
+[signal,qam_signal,postiveCarrierIndex,Grop_index]=nn.Output_Group(L, ... % 分组数量
+                                                                   L_cp, ...
+                                                                   L_cs);
+
+% 参考信号
+[label,Ref_martic,~,~]= nn.Grop_ofdm(qam_signal,L,L_cp,L_cs);
+
+% 需要生成新的qam信号参考矩阵，用于信道均衡，相噪估计
+Ref_martic;
+
 
 % System Parameters
 fs=nn.Fs;
@@ -33,7 +50,9 @@ CSPR_Mea;
 
 %参考信号
 ref_seq=reshape(qam_signal,1,[]);
-ref_seq = repmat(ref_seq,1,100);
+ref_seq = repmat(ref_seq,1,10);
+
+
 
 %%---------------------------------------          Laser           ----------------------------%%
 % Generate LO field with phase noise
@@ -101,79 +120,47 @@ Receiver=OFDM_Receiver( ...
                         ofdmPHY, ...       %%% 发射机传输的参数
                         ofdmPHY.Fs, ...    %   采样
                         6*ofdmPHY.Fs, ...  % 上采样
-                        ofdmPHY.nPkts, ...            % 信道训练长度
+                        100, ...            % 信道训练长度
                         1:1:ofdmPHY.nModCarriers, ...    %导频位置
                         1, ...             % 选取第一段信号
                         ref_seq, ...       % 参考序列
-                        qam_signal, ...    % qam 矩阵
-                        'off', ...         % 是否采用CPE
+                        Ref_martic, ...    % qam 矩阵
+                        'on', ...         % 是否采用CPE
                         'off', ...         % 对所有载波进行相位补偿
                         'KK');             % 接收方式
 
 % 信号预处理
 [ReceivedSignal,Dc]=Receiver.Preprocessed_signal(ipd_btb);
-% BER 计算
-[ber,num]=Receiver.Cal_BER(ReceivedSignal);
 
 %  解调
+% 重新设置载波位置
+Receiver.ofdmPHY.dataCarrierIndex=postiveCarrierIndex;
 [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
 
-% 相噪
-index_carrier=60;
-PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
-%%%% 直接使用参考qam矩阵进行进行相噪消除
+% 分组解调，获得每组的信号
+Receiver.Button.Cyclic='CP_CS';
+Receiver.ofdmPHY.L=L;
+Receiver.ofdmPHY.L_cp=L_cp;
+Receiver.ofdmPHY.L_cs=L_cs;
+% 确定新的分组
+% L组 ， 每组len_carrier个载波
+len_carrier=length(postiveCarrierIndex)/L;
+% 子载波的顺序索引
+for i=1:L
+    Grop_index_cyclic(i,:)=len_carrier*(i-1)+1:len_carrier*i;
+end
+[DataGroup,processedGroups,CyclicsGroups]=Receiver.GroupDemodulation(data_ofdm_martix,Grop_index_cyclic);
 
-% 转换为矩阵形式
-data_qam_martix=reshape(qam_signal,Receiver.ofdmPHY.nModCarriers,[]);
-% 信道响应 叠加
-H_data_qam_martix=data_qam_martix.*Hf;
-% 重新调制
-% nOffsetSub 行置零 ,positive 放置qam ， 后续置零
-X= ([zeros(Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts);...
-    H_data_qam_martix; ...
-    zeros(Receiver.ofdmPHY.fft_size-Receiver.ofdmPHY.nModCarriers-Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts)]);
-% 转换为时域
-ofdmSig=ifft(X);
-% 添加CP
-ofdmSig = [ofdmSig(end-Receiver.ofdmPHY.nCP+1:end,:);ofdmSig];
-% 并串转换
-ofdmSig = ofdmSig(:);
-% 归一化
-scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
-ofdm_signal = ofdmSig./scale_factor;
-% 还需添加直流项
-ofdm_signal=ofdm_signal+Dc;
+[~,~,Ref_Cyclic]=Receiver.GroupDemodulation(Ref_martic,Grop_index_cyclic);
+% 分组数据合并，进行解码
+singleSubMatrix = processedGroups{1};
+for i=2:L
+    SubMatrix = processedGroups{i}; %读取元胞组
+    singleSubMatrix=cat(1,singleSubMatrix,SubMatrix);
+end
+[ber1,num1]=Receiver.Direcct_Cal_BER(singleSubMatrix(:));
 
-% % % 时域处理
-[phi_est,data]=Receiver.Time_Phase_Eliminate(ReceivedSignal,ofdm_signal);
-[ber1,num1]=Receiver.Cal_BER(data);
 
-mon_ESA(phi_est,fs);
 
-% 时域相噪分布
-figure;
-histogram(phi_est)
-title('时域相噪分布')
 
-index_carrier=200;
-PN_carrier1=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
-
-index_carrier=10;
-PN_carrier2=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
-
-index_carrier=300;
-PN_carrier3=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
-% 载波相噪分析
-figure;
-histogram(PN_carrier)
-title('第60载波相噪分布')
-figure;
-histogram(PN_carrier1)
-title('第200载波相噪分布')
-figure;
-histogram(PN_carrier2)
-title('第10载波相噪分布')
-figure;
-histogram(PN_carrier3)
-title('第300载波相噪分布')

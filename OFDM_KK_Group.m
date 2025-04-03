@@ -1,7 +1,8 @@
+% KK 分组 没加载波循环 
 clear;close all;clc;
 addpath('Fncs\')
-% addpath('D:\PhD\Codebase\')
-addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
+addpath('D:\PhD\Codebase\')
+% addpath('D:\BIT_PhD\Base_Code\Codebase_using\')
 % 发射机配置
 OFDM_TX;
 % 生成信号
@@ -70,7 +71,7 @@ signal_TXO=signal_TX.*sigLO;
 
 % fiber param
 param=struct();
-param.Ltotal = 100; %km
+param.Ltotal = 700; %km
 param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
@@ -140,6 +141,7 @@ Receiver=OFDM_Receiver( ...
 index_carrier=120;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
+% 分组解调，获得每组的信号
 Receiver.Button.Cyclic='none';
 Receiver.ofdmPHY.L=L;
 [DataGroup,processedGroups]=Receiver.GroupDemodulation(data_ofdm_martix,Grop_index);
@@ -151,35 +153,10 @@ for i=2:L
     SubMatrix = DataGroup{i}; %读取元胞组
     singleSubMatrix=cat(1,singleSubMatrix,SubMatrix);
 end
-
+% 解码
 [ber1,num1]=Receiver.Direcct_Cal_BER(singleSubMatrix(:));
 
-I=singleSubMatrix-data_ofdm_martix;
 
 
-% % 分组 解码 ，解调为QAM信号后，进行分组拆分
-% DataGroup = cell(1, L);
-% processedGroups=cell(1,L);
-% for i=1:L
-%     carrier_index=Grop_index(i,:);
-%     data_group=data_ofdm_martix(carrier_index,:);
-%     DataGroup{i} = data_group;
-%     if strcmp(type,'CP_CS')
-%         % 去除前缀和后缀载波
-%         processedGroups{i}= data_group(L_cp+1:end-L_cs,:); % 去除CP/CS
-%     end
-% end
-% 
-% 
-% % % 分组数据合并，进行解码
-% % singleSubMatrix = DataGroup{1};
-% % for i=2:L
-% %     SubMatrix = DataGroup{i}; %读取元胞组
-% %     singleSubMatrix=cat(1,singleSubMatrix,SubMatrix);
-% % end
-% 
-% [ber,num]=Direcct_Cal_BER(singleSubMatrix(:));
 
-
-% 测试 分组 时域 相噪消除
 

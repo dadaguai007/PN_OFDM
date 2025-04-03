@@ -126,7 +126,7 @@ classdef OFDM_Receiver < handle
             %保留信号矩阵
             data_ofdm_martix=data_ofdm;
             %归一化
-%             data_ofdm=data_ofdm(:);% 矩阵转换为行向量
+            data_ofdm=data_ofdm(:);% 矩阵转换为行向量
 %             data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
             % 硬判决 为 最近的星座点
             data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);
@@ -162,11 +162,12 @@ classdef OFDM_Receiver < handle
         end
         
         % 拆分分组
-        function [DataGroup,processedGroups]=GroupDemodulation(obj,ReceivedSignal,Grop_index)
+        function [DataGroup,processedGroups,CyclicsGroups]=GroupDemodulation(obj,ReceivedSignal,Grop_index)
             
             % 分组 解码
             DataGroup = cell(1, obj.ofdmPHY.L);
             processedGroups=cell(1,obj.ofdmPHY.L);
+            CyclicsGroups=cell(1,obj.ofdmPHY.L);
             for i=1:obj.ofdmPHY.L
                 carrier_index=Grop_index(i,:);
                 data_group=ReceivedSignal(carrier_index,:);
@@ -174,6 +175,8 @@ classdef OFDM_Receiver < handle
                 if strcmp(obj.Button.Cyclic,'CP_CS')
                     % 去除前缀和后缀载波
                     processedGroups{i}= data_group(obj.ofdmPHY.L_cp+1:end-obj.ofdmPHY.L_cs,:); % 去除CP/CS
+                    % 前缀和后缀进行存储
+                    CyclicsGroups{i}=cat(1,data_group(1:obj.ofdmPHY.L_cp,:),data_group(end-obj.ofdmPHY.L_cs+1:end,:));
                 end
             end
         end
@@ -310,7 +313,7 @@ classdef OFDM_Receiver < handle
             %保留信号矩阵
             data_ofdm_martix=data_ofdm;
             %归一化
-%             data_ofdm=data_ofdm(:);% 矩阵转换为行向量
+            data_ofdm=data_ofdm(:);% 矩阵转换为行向量
 %             data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
             % 硬判决 为 最近的星座点
             data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);

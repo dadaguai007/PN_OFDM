@@ -33,6 +33,8 @@ classdef OFDMQAMN < handle
         cyclic_pattern;
 
         L; % 分组数
+        L_cp; % 前缀载波
+        L_cs; % 后缀载波
     end
 
     properties (Dependent = true)

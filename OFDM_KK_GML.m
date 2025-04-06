@@ -1,4 +1,4 @@
-% KK 接收 ， 时域循环迭代消除相噪
+% KK 接收 ， 分组最大似然
 
 clear;close all;clc;
 addpath('Fncs\')
@@ -100,48 +100,47 @@ mon_ESA(ipd_btb,fs);
 ofdmPHY=nn;
 %%---------------------------------------        解码       ---------------------------%%
 Receiver=OFDM_Receiver( ...
-                        ofdmPHY, ...       %%% 发射机传输的参数
-                        ofdmPHY.Fs, ...    %   采样
-                        6*ofdmPHY.Fs, ...  % 上采样
-                        ofdmPHY.nPkts, ...            % 信道训练长度 1:1:ofdmPHY.nPkts
-                        1:1:ofdmPHY.nModCarriers, ...    %导频位置
-                        1, ...             % 选取第一段信号
-                        ref_seq, ...       % 参考序列
-                        qam_signal, ...    % qam 矩阵
-                        'off', ...         % 是否采用CPE
-                        'off', ...         % 对所有载波进行相位补偿
-                        'KK');             % 接收方式
+    ofdmPHY, ...       %%% 发射机传输的参数
+    ofdmPHY.Fs, ...    %   采样
+    6*ofdmPHY.Fs, ...  % 上采样
+    ofdmPHY.nPkts, ...            % 信道训练长度 1:1:ofdmPHY.nPkts
+    1:1:ofdmPHY.nModCarriers, ...    %导频位置
+    1, ...             % 选取第一段信号
+    ref_seq, ...       % 参考序列
+    qam_signal, ...    % qam 矩阵
+    'off', ...         % 是否采用CPE
+    'off', ...         % 对所有载波进行相位补偿
+    'KK');             % 接收方式
 
 % 信号预处理
 [ReceivedSignal,Dc]=Receiver.Preprocessed_signal(ipd_btb);
 % BER 计算
 [ber,num]=Receiver.Cal_BER(ReceivedSignal);
 
-%  解调
 [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
-[ber1,num1]=Receiver.Direcct_Cal_BER(data_qam);
-% 相噪
-index_carrier=60;
-PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
+%%----------------------------------------- 分组  ------------------------------------------------------------%%
+Group_Num = 300;
+% 硬盘后转换为矩阵
+data_qam_hat=reshape(data_qam,Receiver.ofdmPHY.nModCarriers,[]);
+for m=1:Receiver.ofdmPHY.nModCarriers/Group_Num
+    % 每组数据的索引
+    Num=(m-1)*Group_Num+1:1:m*Group_Num;
+    % 每组的H矩阵
+    H(m,:)=sum( data_ofdm_martix(Num,:).* conj(data_qam_hat(Num,:)));
+    % second stage phase estimation
+    phi(m,:)= atan(imag(H(m,:))./real(H(m,:)));
+    %     phi(m,:)= angle(H(m,:));
 
-% 时域迭代消除原理
-ofdm_time_signal=ReceivedSignal;
-for i=1:4
-    % 重构信号
-    Re_ofdmSig=Receiver.Remodulation(ReceivedSignal,Dc);
-    %Receiver.Button.Decsion='nonlinear';
-    % 时域处理
-    [phi_est,ReceivedSignal]=Receiver.Time_Phase_Eliminate(ofdm_time_signal,Re_ofdmSig);
-    [ber1,num1]=Receiver.Cal_BER(ReceivedSignal);
 end
-%%
 
-Index=40;
-Receiver.BER(data_ofdm_martix(Index,:),qam_signal(Index,:));
-phi=angle(data_ofdm_martix(Index,:)./qam_signal(Index,:));
+%%=============================================== 补偿，解码  ======================================================%%
+for m=1:Receiver.ofdmPHY.nModCarriers/Group_Num
+    % 每组数据的索引
+    Num=(m-1)*Group_Num+1:1:m*Group_Num;
+    % 每组之间进行补偿
+    X(Num,:)=data_ofdm_martix(Num,:).*...
+        repmat(exp(-1j.*phi(m,:)),Group_Num,1);
+end
 
-I=data_ofdm_martix(Index,:).*exp(-1j.*phi);
-scatterplot(I)
-scatterplot(data_ofdm_martix(Index,:))
-scatterplot(signal_ofdm_martix(Index,:))
-Receiver.BER(I,qam_signal(Index,:));
+% BER 计算
+[ber1,num1]=Receiver.Direcct_Cal_BER(X(:));

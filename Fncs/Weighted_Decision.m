@@ -14,8 +14,8 @@ E_q=s_q_hd-s_q;
 gamma_i=reliability(s_i);
 gamma_q=reliability(s_q);
 
-a=10;
-b=0.5;
+a=20;
+b=0.7;
 f_i=reliability_nonlinear(gamma_i,a,b);
 f_q=reliability_nonlinear(gamma_q,a,b);
 

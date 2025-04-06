@@ -2,7 +2,7 @@ function rxSignal=hard_decision_pam(M,R)
 % 硬判决
 const = pammod(0:M-1,M);
 % 归一化
-% const=pnorm(const);
+const=pnorm(const);
 for i = 1:length(R)
     distances = abs(R(i) - const).^2; % 计算接收信号点到所有星座点的距离
     [~, index] = min(distances); % 找到距离最近的星座点的索引

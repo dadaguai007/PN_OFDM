@@ -1,4 +1,4 @@
-% KK 接收 ， 时域循环迭代消除相噪
+% KK 接收 ，分组CPE 和 CPE
 
 clear;close all;clc;
 addpath('Fncs\')
@@ -43,7 +43,7 @@ ref_seq = repmat(ref_seq,1,100);
 Pi_dBm = 10;
 Pi = 10^(Pi_dBm/10)*1e-3; %W
 Ai= sqrt(Pi);
-lw      = 2e6;    % laser linewidth
+lw      = 10e6;    % laser linewidth
 phi_pn_lo = phaseNoise(lw, length(signal_TX), Ta);
 sigLO = exp(1j * phi_pn_lo);
 Pin=Ai*sigLO;
@@ -54,7 +54,7 @@ signal_TXO=signal_TX.*sigLO;
 
 % fiber param
 param=struct();
-param.Ltotal = 500; %km
+param.Ltotal = 200; %km
 param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
@@ -96,6 +96,8 @@ end
 ipd_btb = pd(sigRxo, paramPD);
 mon_ESA(ipd_btb,fs);
 
+% 采用CPE补偿方式 测试
+
 % 发射机参数
 ofdmPHY=nn;
 %%---------------------------------------        解码       ---------------------------%%
@@ -103,8 +105,8 @@ Receiver=OFDM_Receiver( ...
                         ofdmPHY, ...       %%% 发射机传输的参数
                         ofdmPHY.Fs, ...    %   采样
                         6*ofdmPHY.Fs, ...  % 上采样
-                        ofdmPHY.nPkts, ...            % 信道训练长度 1:1:ofdmPHY.nPkts
-                        1:1:ofdmPHY.nModCarriers, ...    %导频位置
+                        ofdmPHY.nPkts, ...            % 信道训练长度
+                        1:4:ofdmPHY.nModCarriers, ...    %导频位置
                         1, ...             % 选取第一段信号
                         ref_seq, ...       % 参考序列
                         qam_signal, ...    % qam 矩阵
@@ -119,29 +121,51 @@ Receiver=OFDM_Receiver( ...
 
 %  解调
 [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
-[ber1,num1]=Receiver.Direcct_Cal_BER(data_qam);
+
 % 相噪
 index_carrier=60;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
-% 时域迭代消除原理
-ofdm_time_signal=ReceivedSignal;
-for i=1:4
-    % 重构信号
-    Re_ofdmSig=Receiver.Remodulation(ReceivedSignal,Dc);
-    %Receiver.Button.Decsion='nonlinear';
-    % 时域处理
-    [phi_est,ReceivedSignal]=Receiver.Time_Phase_Eliminate(ofdm_time_signal,Re_ofdmSig);
-    [ber1,num1]=Receiver.Cal_BER(ReceivedSignal);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  分组 CPE   （每组所有载波都使用）   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Receiver.Button.CPE_Status           = 'off';% 默认 关闭 CPE
+Receiver.Button.PN_Total_Carrier     = 'off';% 默认 关闭 所有载波相除相噪
+%  解调
+[signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
+
+% 接收信号中的数据载波
+Rec_signal_ofdm=signal_ofdm_martix(Receiver.ofdmPHY.dataCarrierIndex,:);
+% 每组数量
+Group_Num = 20;
+% 每组载波所有载波 进行使用
+for m=1:Receiver.ofdmPHY.nModCarriers/Group_Num
+    % 每组数据的索引
+    Num=(m-1)*Group_Num+1:1:m*Group_Num;
+    % 每组所有载波
+    Rectr=data_ofdm_martix(Num,:);
+    Rec=Rec_signal_ofdm(Num,:);
+    H=Hf(Num); % 信道矩阵
 end
-%%
 
-Index=40;
-Receiver.BER(data_ofdm_martix(Index,:),qam_signal(Index,:));
-phi=angle(data_ofdm_martix(Index,:)./qam_signal(Index,:));
 
-I=data_ofdm_martix(Index,:).*exp(-1j.*phi);
-scatterplot(I)
-scatterplot(data_ofdm_martix(Index,:))
-scatterplot(signal_ofdm_martix(Index,:))
-Receiver.BER(I,qam_signal(Index,:));
+
+% 转换为矩阵形式
+data_qam_martix=reshape(qam_signal,Receiver.ofdmPHY.nModCarriers,[]);
+% 信道响应 叠加
+H_data_qam_martix=data_qam_martix.*Hf;
+% 重新调制
+% nOffsetSub 行置零 ,positive 放置qam ， 后续置零
+X= ([zeros(Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts);...
+    H_data_qam_martix; ...
+    zeros(Receiver.ofdmPHY.fft_size-Receiver.ofdmPHY.nModCarriers-Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts)]);
+% 转换为时域
+ofdmSig=ifft(X);
+% 添加CP
+ofdmSig = [ofdmSig(end-Receiver.ofdmPHY.nCP+1:end,:);ofdmSig];
+% 并串转换
+ofdmSig = ofdmSig(:);
+% 归一化
+scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
+ofdm_signal = ofdmSig./scale_factor;
+% 还需添加直流项
+ofdm_signal=ofdm_signal+Dc;
+

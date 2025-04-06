@@ -41,7 +41,7 @@ ref_seq = repmat(ref_seq,1,100);
 Pi_dBm = 10;
 Pi = 10^(Pi_dBm/10)*1e-3; %W
 Ai= sqrt(Pi);
-lw      = 10e6;    % laser linewidth
+lw      = 1e6;    % laser linewidth
 phi_pn_lo = phaseNoise(lw, length(signal_TX), Ta);
 sigLO = exp(1j * phi_pn_lo);
 Pin=Ai*sigLO;
@@ -52,7 +52,7 @@ signal_TXO=signal_TX.*sigLO;
 
 % fiber param
 param=struct();
-param.Ltotal = 700; %km
+param.Ltotal = 1000; %km
 param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
@@ -101,7 +101,7 @@ Receiver=OFDM_Receiver( ...
                         ofdmPHY, ...       %%% 发射机传输的参数
                         ofdmPHY.Fs, ...    %   采样
                         6*ofdmPHY.Fs, ...  % 上采样
-                        ofdmPHY.nPkts, ...            % 信道训练长度
+                        10, ...            % 信道训练长度
                         1:1:ofdmPHY.nModCarriers, ...    %导频位置
                         1, ...             % 选取第一段信号
                         ref_seq, ...       % 参考序列
@@ -127,7 +127,7 @@ PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:))
 % 转换为矩阵形式
 data_qam_martix=reshape(qam_signal,Receiver.ofdmPHY.nModCarriers,[]);
 % 信道响应 叠加
-H_data_qam_martix=data_qam_martix.*Hf;
+H_data_qam_martix=data_qam_martix.*repmat(Hf,1,Receiver.ofdmPHY.nPkts);
 % 重新调制
 % nOffsetSub 行置零 ,positive 放置qam ， 后续置零
 X= ([zeros(Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts);...

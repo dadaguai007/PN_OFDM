@@ -28,7 +28,7 @@ classdef OFDM_Receiver < handle
             else
                 error('Number of input variables must be either 0 (default values) or 10');
             end
-
+            obj.Button.Decsion='hard';
         end
 
 
@@ -100,6 +100,17 @@ classdef OFDM_Receiver < handle
             fprintf('Num of Errors = %d, BER = %1.7f\n',num,ber);
         end
 
+        % 输入QAM信号进行解码
+        function [ber,num]=BER(obj,ReceivedSignal,ref)
+            % 信号解码
+            qam_bit=obj.hard_decision(ReceivedSignal);
+            % label信号
+            ref_seq =qamdemod(ref ,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);
+            ref_seq=ref_seq(:);
+            % 计算误码率
+            [ber,num,~] = CalcBER(qam_bit,ref_seq);
+            fprintf('Num of Errors = %d, BER = %1.7f\n',num,ber);
+        end
         % 解调
         function [signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Demodulation(obj,ReceivedSignal)
 
@@ -129,7 +140,12 @@ classdef OFDM_Receiver < handle
             data_ofdm=data_ofdm(:);% 矩阵转换为行向量
 %             data_ofdm = data_ofdm./sqrt(mean(abs(data_ofdm(:)).^2));
             % 硬判决 为 最近的星座点
-            data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);
+            if strcmp(obj.Button.Decsion,'hard')
+                data_qam=hard_decision_qam(obj.ofdmPHY.M,data_ofdm);
+                %  加权非线性判决
+            elseif strcmp(obj.Button.Decsion,'nonlinear')
+                data_qam=Weighted_Decision(data_ofdm.');
+            end
             % 硬判决 为bit
             qam_bit=obj.hard_decision(data_ofdm);
 
@@ -137,12 +153,13 @@ classdef OFDM_Receiver < handle
         
         % 重新生成满足条件的复数信号，  不是平方接收的实数信号
         function ofdm_signal=Remodulation(obj,ReceivedSignal,Dc)
+            
             % 解调获得 信号  和 信道响应
             [~,~,Hf,data_qam,~]=obj.Demodulation(ReceivedSignal);
             % 转换为矩阵形式
             data_qam_martix=reshape(data_qam,obj.ofdmPHY.nModCarriers,[]);
             % 信道响应 叠加
-            H_data_qam_martix=data_qam_martix.*Hf;
+            H_data_qam_martix=data_qam_martix.*repmat(Hf,1,obj.ofdmPHY.nPkts);
             % 重新调制
             % nOffsetSub 行置零 ,positive 放置qam ， 后续置零
             X= ([zeros(obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts);...
@@ -155,10 +172,10 @@ classdef OFDM_Receiver < handle
             % 并串转换
             ofdmSig = ofdmSig(:);
             % 归一化
-            scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
-            ofdm_signal = ofdmSig./scale_factor;
+%             scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
+%             ofdm_signal = ofdmSig./scale_factor;
             % 还需添加直流项
-            ofdm_signal=ofdm_signal+Dc;
+            ofdm_signal=ofdmSig+Dc;
         end
         
         % 拆分分组
@@ -193,15 +210,17 @@ classdef OFDM_Receiver < handle
         % ZF信道均衡
         function [data_kk,Hf]=one_tap_equalization(obj,data_ofdm)
             % channel estimation
-            rxTrainSymbol = data_ofdm(:,1:obj.Nr.nTrainSym);
+            rxTrainSymbol = data_ofdm(:,1:1:obj.Nr.nTrainSym);
             qam_signal_mat=repmat(obj.Implementation.qam_signal,1,1);
-            refTrainSymbol = qam_signal_mat(:,1:obj.Nr.nTrainSym);
-            % 信道响应
+            refTrainSymbol = qam_signal_mat(:,1:1:obj.Nr.nTrainSym);
+%             % 信道响应
             Hf = mean(rxTrainSymbol./refTrainSymbol,2);
-
-            % channel equalization
+% 
+%             % channel equalization
             data_kk = data_ofdm.*repmat(1./Hf,1,obj.ofdmPHY.nPkts);
-
+            %
+%             Hf = rxTrainSymbol./refTrainSymbol;
+%             data_kk = data_ofdm.*(1./Hf);
         end
         % 相位均衡 CPE
         function data=CPE_Eliminate(obj,data_ofdm)

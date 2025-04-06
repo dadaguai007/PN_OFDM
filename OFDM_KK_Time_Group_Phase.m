@@ -1,4 +1,4 @@
-% KK 接收 ，分组CPE 和 CPE
+% KK 接收 ，分组 Time PN 消除 （失败）
 
 clear;close all;clc;
 addpath('Fncs\')
@@ -102,17 +102,17 @@ mon_ESA(ipd_btb,fs);
 ofdmPHY=nn;
 %%---------------------------------------        解码       ---------------------------%%
 Receiver=OFDM_Receiver( ...
-                        ofdmPHY, ...       %%% 发射机传输的参数
-                        ofdmPHY.Fs, ...    %   采样
-                        6*ofdmPHY.Fs, ...  % 上采样
-                        ofdmPHY.nPkts, ...            % 信道训练长度
-                        1:4:ofdmPHY.nModCarriers, ...    %导频位置
-                        1, ...             % 选取第一段信号
-                        ref_seq, ...       % 参考序列
-                        qam_signal, ...    % qam 矩阵
-                        'off', ...         % 是否采用CPE
-                        'off', ...         % 对所有载波进行相位补偿
-                        'KK');             % 接收方式
+    ofdmPHY, ...       %%% 发射机传输的参数
+    ofdmPHY.Fs, ...    %   采样
+    6*ofdmPHY.Fs, ...  % 上采样
+    ofdmPHY.nPkts, ...            % 信道训练长度
+    1:4:ofdmPHY.nModCarriers, ...    %导频位置
+    1, ...             % 选取第一段信号
+    ref_seq, ...       % 参考序列
+    qam_signal, ...    % qam 矩阵
+    'off', ...         % 是否采用CPE
+    'off', ...         % 对所有载波进行相位补偿
+    'KK');             % 接收方式
 
 % 信号预处理
 [ReceivedSignal,Dc]=Receiver.Preprocessed_signal(ipd_btb);
@@ -126,11 +126,6 @@ Receiver=OFDM_Receiver( ...
 index_carrier=60;
 PN_carrier=angle(data_ofdm_martix(index_carrier,:)./qam_signal(index_carrier,:));
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  分组 CPE   （每组所有载波都使用）   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Receiver.Button.CPE_Status           = 'off';% 默认 关闭 CPE
-Receiver.Button.PN_Total_Carrier     = 'off';% 默认 关闭 所有载波相除相噪
-%  解调
-[signal_ofdm_martix,data_ofdm_martix,Hf,data_qam,qam_bit]=Receiver.Demodulation(ReceivedSignal);
 
 % 接收信号中的数据载波
 Rec_signal_ofdm=signal_ofdm_martix(Receiver.ofdmPHY.dataCarrierIndex,:);
@@ -144,28 +139,36 @@ for m=1:Receiver.ofdmPHY.nModCarriers/Group_Num
     Rectr=data_ofdm_martix(Num,:);
     Rec=Rec_signal_ofdm(Num,:);
     H=Hf(Num); % 信道矩阵
+    % 信道响应 叠加
+    H_data_qam_martix=Rectr.*repmat(H,1,Receiver.ofdmPHY.nPkts);
+    % 重建
+    ofdm_signal_Rectr=Receiver.Group_Remodulation(H_data_qam_martix,Dc,Group_Num);
+    % 接收
+    ofdm_signal_Rec=Receiver.Group_Remodulation(Rec,Dc,Group_Num);
+    phi_est=angle(ofdm_signal_Rec./ofdm_signal_Rectr);
+    % 时域信号
+    data=ofdm_signal_Rec.*exp(-1j.*phi_est);
+    % 并串转换
+    Data(m,:)=data(:);
+    Index(m,:)=Num;
 end
 
+index=5;
+% 转为矩阵形式
+ofdm = reshape(Data(index,:),Receiver.ofdmPHY.fft_size,[]);
+ofdm = fft(ofdm);
+% get the modulated data carriers
+data_ofdm = ofdm(Index(index,:),:);
+% 信道均衡
+% channel estimation
+rxTrainSymbol = data_ofdm(:,1:1:Receiver.Nr.nTrainSym);
+qam_signal_mat=repmat(Receiver.Implementation.qam_signal,1,1);
+refTrainSymbol = qam_signal_mat(Index(index,:),1:1:Receiver.Nr.nTrainSym);
+% 信道响应
+Hf = mean(rxTrainSymbol./refTrainSymbol,2);
 
-
-% 转换为矩阵形式
-data_qam_martix=reshape(qam_signal,Receiver.ofdmPHY.nModCarriers,[]);
-% 信道响应 叠加
-H_data_qam_martix=data_qam_martix.*Hf;
-% 重新调制
-% nOffsetSub 行置零 ,positive 放置qam ， 后续置零
-X= ([zeros(Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts);...
-    H_data_qam_martix; ...
-    zeros(Receiver.ofdmPHY.fft_size-Receiver.ofdmPHY.nModCarriers-Receiver.ofdmPHY.nOffsetSub,Receiver.ofdmPHY.nPkts)]);
-% 转换为时域
-ofdmSig=ifft(X);
-% 添加CP
-ofdmSig = [ofdmSig(end-Receiver.ofdmPHY.nCP+1:end,:);ofdmSig];
-% 并串转换
-ofdmSig = ofdmSig(:);
-% 归一化
-scale_factor = max(max(abs(real(ofdmSig))),max(abs(imag(ofdmSig))));
-ofdm_signal = ofdmSig./scale_factor;
-% 还需添加直流项
-ofdm_signal=ofdm_signal+Dc;
-
+% channel equalization
+data_kk = data_ofdm.*repmat(1./Hf,1,Receiver.ofdmPHY.nPkts);
+Ref=qam_signal(Index(index,:),:);
+% 解码
+Receiver.BER(data_kk(:),Ref(:));

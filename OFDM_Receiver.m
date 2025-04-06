@@ -177,7 +177,20 @@ classdef OFDM_Receiver < handle
             % 还需添加直流项
             ofdm_signal=ofdmSig+Dc;
         end
-        
+        function ofdm_signal=Group_Remodulation(obj,data_qam_martix,Dc,Group_Num)
+            % 重新调制
+            % nOffsetSub 行置零 ,positive 放置qam ， 后续置零
+            X= ([zeros(obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts);...
+                data_qam_martix; ...
+                zeros(obj.ofdmPHY.fft_size-Group_Num-obj.ofdmPHY.nOffsetSub,obj.ofdmPHY.nPkts)]);
+            % 转换为时域
+            ofdmSig=ifft(X);
+            
+            % 并串转换
+            ofdmSig = ofdmSig(:);
+            % 还需添加直流项
+            ofdm_signal=ofdmSig+Dc;
+        end
         % 拆分分组
         function [DataGroup,processedGroups,CyclicsGroups]=GroupDemodulation(obj,ReceivedSignal,Grop_index)
             

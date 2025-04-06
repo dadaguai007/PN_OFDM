@@ -1,6 +1,6 @@
 classdef OFDMQAMN < handle
     % OFDM信号的生成 ，包括 脉冲成型步骤 ，以及频率谱的绘制
-    % 输出信号：  SSB-PAM 信号
+    % 输出信号：  SSB-QAM 信号
     % 随机码包括：PRBS ，rand 两种
     properties
         order;
@@ -35,6 +35,8 @@ classdef OFDMQAMN < handle
         L; % 分组数
         L_cp; % 前缀载波
         L_cs; % 后缀载波
+
+        ModulationPHY;%信号调制参数
     end
 
     properties (Dependent = true)
@@ -186,6 +188,49 @@ classdef OFDMQAMN < handle
                 % 参考向量
                 Ref_martix=qam_signal;
             end
+        end
+        % 信号调制
+        function sigTxo=OFDM_Modulation(obj,phi,signal)
+            % IQ调制
+            % 输入光功率
+            Pi=obj.ModulationPHY.Pi_dBm; %W
+            % phi 为 Vbias 偏移程度   phi=0.87; 
+            Amp=obj.ModulationPHY.Amp; % 信号放大      Amp=1.7;
+            % 调制器参数
+            param.Vpi=obj.ModulationPHY.Vpi;
+            param.VbI=-phi*obj.ModulationPHY.Vpi;
+            param.VbQ=-phi*obj.ModulationPHY.Vpi;
+            param.Vphi=param.Vpi/2;
+            % 输入光功率
+            Ai  = sqrt(Pi);
+            % 调制指数
+            m=Modulation_index(Amp*signal.',param.Vpi,'ofdm');
+            fprintf('Modulation index=%3.3f\n',m);
+            % 调制
+            sigTxo = iqm(Ai, Amp*signal, param);
+            % 功率计算
+            signal_power=signalpower(sigTxo);
+            fprintf('optical signal power: %.2f dBm\n', 10 * log10(signal_power / 1e-3));
+        end
+        % CSPR 计算
+        function CSPR=Cal_CSPR(obj,sigTxo,phi)
+
+            % Cal CSPR
+            param.Vpi=obj.ModulationPHY.Vpi;
+            param.VbI=-phi*obj.ModulationPHY.Vpi;
+            param.VbQ=-phi*obj.ModulationPHY.Vpi;
+            param.Vphi=obj.ModulationPHY.Vpi/2;
+             % 输入光功率
+            Ai  = sqrt(obj.ModulationPHY.Pi_dBm);
+            Eout1 = iqm(Ai, 0, param);
+
+            Eout_s=sigTxo-Eout1*ones(1,length(sigTxo));
+            power1=signalpower(Eout1);
+            Ps=signalpower(Eout_s);
+            CSPR = power1/(Ps);
+            CSPR=10*log10(CSPR);
+            fprintf("the CSPR is %1.2fdB\n",CSPR);
+
         end
 
 

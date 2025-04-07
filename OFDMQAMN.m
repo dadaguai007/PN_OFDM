@@ -322,6 +322,16 @@ classdef OFDMQAMN < handle
             sig = ifft( fft( useq ) .* fft( hf ) );
         end
 
+
+        % 频域上采样
+        function x_up=Up_sample(~,m,signal)
+     
+            N=length(signal);
+            X=fft(signal);
+            X_up=[X(1:N/2).'  zeros(1,N*m-N)  X(N/2+1:end).'];
+            x_up=m*ifft((X_up),m*N);
+        end
+
         function plotSpectrum(obj)
             [y1,y2,Signal,~] = obj.Output();
 

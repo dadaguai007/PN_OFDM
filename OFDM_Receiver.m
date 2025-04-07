@@ -354,7 +354,6 @@ classdef OFDM_Receiver < handle
 
         end
 
-
         % 硬判决
         function data_qam=hard_decision(obj,Receiver_data)
             data_qam = qamdemod(Receiver_data,obj.ofdmPHY.M,'OutputType','bit','UnitAveragePower',1);

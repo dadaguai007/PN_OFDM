@@ -17,20 +17,9 @@ Ta=1/fs;
 scale_factor = max(max(abs(real(signal))),max(abs(imag(signal))));
 signal_ofdm = signal./scale_factor;
 
-% Carrier
-A=1;
-%Amp_factor
-Amp=1;
 
 % 转置
 signal_ofdm=signal_ofdm.';
-
-
-% signal_TX
-signal_TX=A+Amp*signal_ofdm;
-
-% CSPR measure
-CSPR_Mea;
 
 
 %参考信号
@@ -44,17 +33,29 @@ Pi_dBm = 10;
 Pi = 10^(Pi_dBm/10)*1e-3; %W
 Ai= sqrt(Pi);
 lw      = 10e6;    % laser linewidth
-phi_pn_lo = phaseNoise(lw, length(signal_TX), Ta);
+phi_pn_lo = phaseNoise(lw, length(signal_ofdm), Ta);
 sigLO = exp(1j * phi_pn_lo);
 Pin=Ai*sigLO;
 
+%Amp_factor
+Amp=1.7;
 
+%%---------------------------------------          Modulator           ----------------------------%%
 % Optical Signal
-signal_TXO=signal_TX;
+nn.ModulationPHY.Pi_dBm=Pi_dBm; %dB
+nn.ModulationPHY.Amp=Amp; % 信号放大
+nn.ModulationPHY.Vpi=9; % Vpi
+phi=0.88;
+Lo=ones(1,length(signal_ofdm));
+% 调制
+signal_TXO=nn.OFDM_Modulation(phi,signal_ofdm,Lo);
+% CSPR
+CSPR=nn.Cal_CSPR(signal_TXO,phi,Lo);
+
 
 % fiber param
 param=struct();
-param.Ltotal = 700; %km
+param.Ltotal = 200; %km
 param.Lspan =10;
 param.hz= 1;
 param.alpha=0.2;
@@ -74,13 +75,8 @@ paramPD.Fs=fs;
 
 
 
-
 %noise
 %sigTxo=awgn(sigTxo,snr(index),'measured');
-
-%power
-power=signalpower(signal_TXO);
-fprintf('optical signal power: %.2f dBm\n', 10 * log10(power / 1e-3));
 
 
 % Transmission
@@ -92,11 +88,9 @@ else
 end
 
 % DD-OFDM
-%pd-Receiver
+% pd-Receiver
 ipd_btb = pd(sigRxo, paramPD);
 mon_ESA(ipd_btb,fs);
-
-% 采用CPE补偿方式 测试
 
 % 发射机参数
 ofdmPHY=nn;

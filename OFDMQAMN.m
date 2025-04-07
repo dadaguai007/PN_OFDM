@@ -190,10 +190,11 @@ classdef OFDMQAMN < handle
             end
         end
         % 信号调制
-        function sigTxo=OFDM_Modulation(obj,phi,signal)
+        function sigTxo=OFDM_Modulation(obj,phi,signal,Lo)
             % IQ调制
             % 输入光功率
-            Pi=obj.ModulationPHY.Pi_dBm; %W
+            % 转换为W
+            Pi=10^(obj.ModulationPHY.Pi_dBm/10)*1e-3; %W
             % phi 为 Vbias 偏移程度   phi=0.87; 
             Amp=obj.ModulationPHY.Amp; % 信号放大      Amp=1.7;
             % 调制器参数
@@ -202,7 +203,7 @@ classdef OFDMQAMN < handle
             param.VbQ=-phi*obj.ModulationPHY.Vpi;
             param.Vphi=param.Vpi/2;
             % 输入光功率
-            Ai  = sqrt(Pi);
+            Ai  = sqrt(Pi).*Lo;
             % 调制指数
             m=Modulation_index(Amp*signal.',param.Vpi,'ofdm');
             fprintf('Modulation index=%3.3f\n',m);
@@ -213,7 +214,7 @@ classdef OFDMQAMN < handle
             fprintf('optical signal power: %.2f dBm\n', 10 * log10(signal_power / 1e-3));
         end
         % CSPR 计算
-        function CSPR=Cal_CSPR(obj,sigTxo,phi)
+        function CSPR=Cal_CSPR(obj,sigTxo,phi,Lo)
 
             % Cal CSPR
             param.Vpi=obj.ModulationPHY.Vpi;
@@ -221,10 +222,11 @@ classdef OFDMQAMN < handle
             param.VbQ=-phi*obj.ModulationPHY.Vpi;
             param.Vphi=obj.ModulationPHY.Vpi/2;
              % 输入光功率
-            Ai  = sqrt(obj.ModulationPHY.Pi_dBm);
-            Eout1 = iqm(Ai, 0, param);
+             Pi=10^(obj.ModulationPHY.Pi_dBm/10)*1e-3; %W
+            Ai  = sqrt(Pi);
+            Eout1 = iqm(Ai*Lo, 0, param);
 
-            Eout_s=sigTxo-Eout1*ones(1,length(sigTxo));
+            Eout_s=sigTxo-Eout1;
             power1=signalpower(Eout1);
             Ps=signalpower(Eout_s);
             CSPR = power1/(Ps);

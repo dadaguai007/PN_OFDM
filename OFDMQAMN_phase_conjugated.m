@@ -30,8 +30,9 @@ classdef OFDMQAMN_phase_conjugated < handle
         percentage; % PCP的百分比
         Type
 
-                len;
+        len;
         dataCarrierIndex;
+        ModulationPHY;%信号调制参数
     end
 
     properties (Dependent = true)
@@ -105,7 +106,51 @@ classdef OFDMQAMN_phase_conjugated < handle
             y1=SigI(:);
             y2=SigQ(:);
         end
+% 信号调制
+        function sigTxo=OFDM_Modulation(obj,phi,signal,Lo)
+            % IQ调制
+            % 输入光功率
+            % 转换为W
+            Pi=10^(obj.ModulationPHY.Pi_dBm/10)*1e-3; %W
+            % phi 为 Vbias 偏移程度   phi=0.87; 
+            Amp=obj.ModulationPHY.Amp; % 信号放大      Amp=1.7;
+            % 调制器参数
+            param.Vpi=obj.ModulationPHY.Vpi;
+            param.VbI=-phi*obj.ModulationPHY.Vpi;
+            param.VbQ=-phi*obj.ModulationPHY.Vpi;
+            param.Vphi=param.Vpi/2;
+            % 输入光功率
+            Ai  = sqrt(Pi).*Lo;
+            % 调制指数
+            m=Modulation_index(Amp*signal.',param.Vpi,'ofdm');
+            fprintf('Modulation index=%3.3f\n',m);
+            % 调制
+            sigTxo = iqm(Ai, Amp*signal, param);
+            % 功率计算
+            signal_power=signalpower(sigTxo);
+            fprintf('optical signal power: %.2f dBm\n', 10 * log10(signal_power / 1e-3));
+        end
+        % CSPR 计算
+        function CSPR=Cal_CSPR(obj,sigTxo,phi,Lo)
 
+            % Cal CSPR
+            param.Vpi=obj.ModulationPHY.Vpi;
+            param.VbI=-phi*obj.ModulationPHY.Vpi;
+            param.VbQ=-phi*obj.ModulationPHY.Vpi;
+            param.Vphi=obj.ModulationPHY.Vpi/2;
+             % 输入光功率
+             Pi=10^(obj.ModulationPHY.Pi_dBm/10)*1e-3; %W
+            Ai  = sqrt(Pi);
+            Eout1 = iqm(Ai*Lo, 0, param);
+
+            Eout_s=sigTxo-Eout1;
+            power1=signalpower(Eout1);
+            Ps=signalpower(Eout_s);
+            CSPR = power1/(Ps);
+            CSPR=10*log10(CSPR);
+            fprintf("the CSPR is %1.2fdB\n",CSPR);
+
+        end
         function [data,symbols_prbs]=prbs_bits(obj)
             %参数：obj.prbsOrder，NSym，M
             %采用prbs码生成基本数据

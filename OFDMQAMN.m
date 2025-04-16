@@ -285,6 +285,7 @@ classdef OFDMQAMN < handle
             ofdmSig = ifft([zeros(obj.nOffsetSub,obj.nPkts);qam_signal;zeros(obj.fft_size-obj.nModCarriers-obj.nOffsetSub,obj.nPkts)]);
             % 第一行置零 ，第二行上载波信号，后续置零
             %             ofdmSig = ifft([zeros(1,obj.nPkts);qam_signal;zeros(obj.fft_size-obj.nModCarriers-1,obj.nPkts)]);
+           % Add Cp
             ofdmSig = [ofdmSig(end-obj.nCP+1:end,:);ofdmSig];
             % 并串转换
             ofdmSig = ofdmSig(:);
